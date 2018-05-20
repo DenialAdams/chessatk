@@ -546,7 +546,7 @@ impl Board {
             } else {
               // CAPTURE (+ EN-PASSANT)
               {
-                let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
+                let pot_squares = [i + 7, i + 9];
                 for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_white_piece() || self.en_passant_square == Some(**x)).filter(|x| abs_diff(i % 8, **x  % 8) == 1) {
                   let a_move = Move {
                     origin: i,
