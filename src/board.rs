@@ -280,33 +280,50 @@ impl Board {
     let mut black_kingside_castle = self.black_kingside_castle;
     let mut black_queenside_castle = self.black_queenside_castle;
     // If king moved, do castling rook movement (potentially) and revoke castling rights (always)
+    // If pawn moved, do en-passant checking
+    let mut en_passant_square = None;
     {
-      if new_squares[a_move.destination as usize] == Square::WhiteKing {
-        white_kingside_castle = false;
-        white_queenside_castle = false;
-        if a_move.origin == 60 && a_move.destination == 62 {
-          // WKC
-          new_squares[63] = Square::Empty;
-          new_squares[61] = Square::WhiteRook;
-        } else if a_move.origin == 60 && a_move.destination == 58 {
-          // WQC
-          new_squares[56] = Square::Empty;
-          new_squares[59] = Square::WhiteRook;
+      match new_squares[a_move.destination as usize] {
+        Square::WhiteKing => {
+          white_kingside_castle = false;
+          white_queenside_castle = false;
+          if a_move.origin == 60 && a_move.destination == 62 {
+            // WKC
+            new_squares[63] = Square::Empty;
+            new_squares[61] = Square::WhiteRook;
+          } else if a_move.origin == 60 && a_move.destination == 58 {
+            // WQC
+            new_squares[56] = Square::Empty;
+            new_squares[59] = Square::WhiteRook;
+          }
         }
-      } else if new_squares[a_move.destination as usize] == Square::BlackKing {
-        black_kingside_castle = false;
-        black_queenside_castle = false;
-        if a_move.origin == 4 && a_move.destination == 6 {
-          // BKC
-          new_squares[7] = Square::Empty;
-          new_squares[5] = Square::BlackRook;
-        } else if a_move.origin == 4 && a_move.destination == 2 {
-          // BQC
-          new_squares[0] = Square::Empty;
-          new_squares[3] = Square::BlackRook;
+        Square::BlackKing => {
+          black_kingside_castle = false;
+          black_queenside_castle = false;
+          if a_move.origin == 4 && a_move.destination == 6 {
+            // BKC
+            new_squares[7] = Square::Empty;
+            new_squares[5] = Square::BlackRook;
+          } else if a_move.origin == 4 && a_move.destination == 2 {
+            // BQC
+            new_squares[0] = Square::Empty;
+            new_squares[3] = Square::BlackRook;
+          }
         }
-      }
+        Square::WhitePawn => {
+          if a_move.origin - a_move.destination == 16 {
+            en_passant_square = Some(a_move.destination + 8)
+          }
+        }
+        Square::BlackPawn => {
+          if a_move.destination - a_move.origin == 16 {
+            en_passant_square = Some(a_move.destination - 8)
+          }
+        }
+        _ => {}
+      } 
     }
+
     // Castling rights (if rook moved)
     {
       if a_move.origin == 63 {
@@ -320,6 +337,8 @@ impl Board {
       }
     }
 
+    // If pawn
+
     Board {
       squares: new_squares,
       white_kingside_castle: white_kingside_castle,
@@ -327,7 +346,7 @@ impl Board {
       black_kingside_castle: black_kingside_castle,
       black_queenside_castle: black_queenside_castle,
       white_to_move: !self.white_to_move,
-      en_passant_square: None,
+      en_passant_square: en_passant_square,
       halfmove_clock: new_halfmove_clock,
       fullmove_number: new_fullmove_number
     }
@@ -355,10 +374,10 @@ impl Board {
               // CAPTURE + PROMOTION
               // NORMAL MOVEMENT + PROMOTION
             } else {
-              // CAPTURE
+              // CAPTURE (+ EN-PASSANT)
               {
                 let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
-                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_black_piece()).filter(|x| abs_diff(i % 8, **x % 8) == 1) {
+                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_black_piece() || self.en_passant_square == Some(**x)).filter(|x| abs_diff(i % 8, **x % 8) == 1) {
                   let a_move = Move {
                     origin: i,
                     destination: *pot_square,
@@ -367,7 +386,6 @@ impl Board {
                   results.push((a_move, self.apply_move(a_move)))
                 }
               }
-              // CAPTURE EN-PASSANT
               // NORMAL MOVEMENT
               if self.squares[i.wrapping_sub(8) as usize] == Square::Empty {
                 let a_move = Move {
@@ -526,10 +544,10 @@ impl Board {
               // CAPTURE + PROMOTION
               // NORMAL MOVEMENT + PROMOTION
             } else {
-              // CAPTURE
+              // CAPTURE (+ EN-PASSANT)
               {
                 let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
-                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_white_piece()).filter(|x| abs_diff(i % 8, **x  % 8) == 1) {
+                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_white_piece() || self.en_passant_square == Some(**x)).filter(|x| abs_diff(i % 8, **x  % 8) == 1) {
                   let a_move = Move {
                     origin: i,
                     destination: *pot_square,
@@ -538,7 +556,6 @@ impl Board {
                   results.push((a_move, self.apply_move(a_move)))
                 }
               }
-              // CAPTURE EN-PASSANT
               // NORMAL MOVEMENT
               if self.squares[(i + 8) as usize] == Square::Empty {
                 let a_move = Move {
@@ -868,5 +885,13 @@ mod tests {
     assert_eq!(a.gen_moves().len(), 20);
     a = a.apply_move("e2e4".parse().unwrap());
     assert_eq!(a.gen_moves().len(), 20);
+  }
+
+  #[test]
+  fn en_passant_option_is_present() {
+    let mut a = Board::from_moves("e2e4").unwrap();
+    assert_eq!(a.en_passant_square, Some(44));
+    a = Board::from_moves("e2e4 e7e5").unwrap();
+    assert_eq!(a.en_passant_square, Some(20));
   }
 }
