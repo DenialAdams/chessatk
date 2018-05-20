@@ -358,15 +358,7 @@ impl Board {
               // CAPTURE
               {
                 let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
-                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_black_piece()) {
-                  let origin_col = i % 8;
-                  let target_col = pot_square % 8;
-                  if origin_col > target_col && origin_col - target_col > 1 {
-                    continue;
-                  }
-                  if target_col > origin_col && target_col - origin_col > 1 {
-                    continue;
-                  }
+                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_black_piece()).filter(|x| abs_diff(i % 8, **x % 8) == 1) {
                   let a_move = Move {
                     origin: i,
                     destination: *pot_square,
@@ -389,15 +381,7 @@ impl Board {
           }
           Square::WhiteKnight => {
             let pot_squares = [i + 6, i + 10, i + 15, i + 17, i.wrapping_sub(6), i.wrapping_sub(10), i.wrapping_sub(15), i.wrapping_sub(17)];
-            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_white_piece()) {
-              let origin_col = i % 8;
-              let target_col = pot_square % 8;
-              if origin_col > target_col && origin_col - target_col > 2 {
-                continue;
-              }
-              if target_col > origin_col && target_col - origin_col > 2 {
-                continue;
-              }
+            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_white_piece()).filter(|x| abs_diff(i % 8, **x % 8) <= 2) {
               let a_move = Move {
                 origin: i,
                 destination: *pot_square,
@@ -505,15 +489,7 @@ impl Board {
           }
           Square::WhiteKing => {
             let pot_squares = [i + 1, i + 7, i + 8, i + 9, i.wrapping_sub(1), i.wrapping_sub(7), i.wrapping_sub(8), i.wrapping_sub(9)];
-            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_white_piece()) {
-              let origin_col = i % 8;
-              let target_col = pot_square % 8;
-              if origin_col > target_col && origin_col - target_col > 1 {
-                continue;
-              }
-              if target_col > origin_col && target_col - origin_col > 1 {
-                continue;
-              }
+            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_white_piece()).filter(|x| abs_diff(i % 8, **x % 8) <= 1) {
               let a_move = Move {
                 origin: i,
                 destination: *pot_square,
@@ -553,15 +529,7 @@ impl Board {
               // CAPTURE
               {
                 let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
-                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_white_piece()) {
-                  let origin_col = i % 8;
-                  let target_col = pot_square % 8;
-                  if origin_col > target_col && origin_col - target_col > 1 {
-                    continue;
-                  }
-                  if target_col > origin_col && target_col - origin_col > 1 {
-                    continue;
-                  }
+                for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| self.squares[**x as usize].is_white_piece()).filter(|x| abs_diff(i % 8, **x  % 8) == 1) {
                   let a_move = Move {
                     origin: i,
                     destination: *pot_square,
@@ -584,15 +552,7 @@ impl Board {
           }
           Square::BlackKnight => {
             let pot_squares = [i + 6, i + 10, i + 15, i + 17, i.wrapping_sub(6), i.wrapping_sub(10), i.wrapping_sub(15), i.wrapping_sub(17)];
-            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_black_piece()) {
-              let origin_col = i % 8;
-              let target_col = pot_square % 8;
-              if origin_col > target_col && origin_col - target_col > 2 {
-                continue;
-              }
-              if target_col > origin_col && target_col - origin_col > 2 {
-                continue;
-              }
+            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_black_piece()).filter(|x| abs_diff(i % 8, **x % 8) <= 2) {
               let a_move = Move {
                 origin: i,
                 destination: *pot_square,
@@ -612,15 +572,7 @@ impl Board {
           }
           Square::BlackKing => {
             let pot_squares = [i + 1, i + 7, i + 8, i + 9, i.wrapping_sub(1), i.wrapping_sub(7), i.wrapping_sub(8), i.wrapping_sub(9)];
-            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_black_piece()) {
-              let origin_col = i % 8;
-              let target_col = pot_square % 8;
-              if origin_col > target_col && origin_col - target_col > 1 {
-                continue;
-              }
-              if target_col > origin_col && target_col - origin_col > 1 {
-                continue;
-              }
+            for pot_square in pot_squares.into_iter().filter(|x| **x < 64).filter(|x| !self.squares[**x as usize].is_black_piece()).filter(|x| abs_diff(i % 8, **x % 8) <= 1) {
               let a_move = Move {
                 origin: i,
                 destination: *pot_square,
@@ -911,7 +863,7 @@ mod tests {
 
   #[test]
   fn move_gen_test() {
-    // To be replaced by a more thorough movet
+    // To be replaced by a more thorough perft
     let mut a = Board::from_start();
     assert_eq!(a.gen_moves().len(), 20);
     a = a.apply_move("e2e4".parse().unwrap());
