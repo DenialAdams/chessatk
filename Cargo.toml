@@ -1,0 +1,13 @@
+[package]
+name = "chessatk"
+version = "0.1.0"
+authors = ["Richard McCormack <brick@brick.codes>"]
+
+[dependencies]
+hyper = "0.11"
+rand = "0.4"
+reqwest = "0.8"
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+structopt = "0.2"
