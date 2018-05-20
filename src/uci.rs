@@ -2,7 +2,10 @@ use messages::{EngineMessage, InterfaceMessage};
 use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 
-pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
+pub(crate) fn main_loop(
+    sender: mpsc::Sender<InterfaceMessage>,
+    receiver: mpsc::Receiver<EngineMessage>,
+) {
     let stdin = io::stdin();
     let mut in_handle = stdin.lock();
     let mut line_buf = String::new();
@@ -12,7 +15,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
 
     loop {
         match in_handle.read_line(&mut line_buf) {
-            Ok(bytes_read) => { 
+            Ok(bytes_read) => {
                 if bytes_read == 0 {
                     break;
                 }
@@ -32,12 +35,8 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                         }
                         "position" => {
                             match args[1] {
-                                "fen" => {
-
-                                }
-                                "startpos" => {
-
-                                }
+                                "fen" => {}
+                                "startpos" => {}
                                 _ => {
                                     // TODO ERROR
                                     eprintln!("Expected 'fen' or 'startpos' following 'postion'");
@@ -56,7 +55,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                         _ => {
                             // TODO ERROR
                             eprintln!("Unexpected input {}", line_buf);
-                            break
+                            break;
                         }
                     }
                 };

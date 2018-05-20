@@ -1,4 +1,4 @@
-use hyper::header::{Headers, Authorization, Bearer};
+use hyper::header::{Authorization, Bearer, Headers};
 use messages::{EngineMessage, InterfaceMessage};
 use rand::Rng;
 use reqwest::{self, StatusCode};
@@ -37,9 +37,8 @@ struct ChallengeOuter {
 #[derive(Deserialize)]
 struct ChallengeInner {
     id: String,
-    rated: bool
+    rated: bool,
 }
-
 
 #[derive(Deserialize)]
 struct Game {
@@ -92,10 +91,13 @@ struct ChatLine {
 enum GameEvent {
     gameFull(GameFull),
     gameState(GameState),
-    chatLine(ChatLine)
+    chatLine(ChatLine),
 }
 
-pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
+pub(crate) fn main_loop(
+    sender: mpsc::Sender<InterfaceMessage>,
+    receiver: mpsc::Receiver<EngineMessage>,
+) {
     let stdout = io::stdout();
     let stderr = io::stderr();
     let mut out_handle = stdout.lock();
@@ -118,11 +120,15 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
     let api_token = api_token.unwrap();
 
     let client = reqwest::Client::new();
-    let user: User = client.get("https://lichess.org/api/account")
-                    .header(Authorization(Bearer {
-                        token: api_token.clone()
-                    }))
-                    .send().unwrap().json().unwrap();
+    let user: User = client
+        .get("https://lichess.org/api/account")
+        .header(Authorization(Bearer {
+            token: api_token.clone(),
+        }))
+        .send()
+        .unwrap()
+        .json()
+        .unwrap();
 
     let user_id = user.id;
     let username = user.username;
@@ -130,11 +136,13 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
         out_handle.write(b"Lichess user is a bot account, proceeding\n");
     } else {
         out_handle.write(b"Attempting to upgrade account to bot\n");
-        let bot_upgrade_res = client.post("https://lichess.org/api/bot/account/upgrade")
-                    .header(Authorization(Bearer {
-                        token: api_token.clone()
-                }))
-                .send().unwrap();
+        let bot_upgrade_res = client
+            .post("https://lichess.org/api/bot/account/upgrade")
+            .header(Authorization(Bearer {
+                token: api_token.clone(),
+            }))
+            .send()
+            .unwrap();
         if bot_upgrade_res.status() == StatusCode::Ok {
             out_handle.write(b"Upgrade to bot account OK, proceeding\n");
         } else {
@@ -144,11 +152,15 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
 
     loop {
         // Accept first challenge
-        let challenge_stream = BufReader::new(client.get("https://lichess.org/api/stream/event")
-                                                .header(Authorization(Bearer {
-                                                    token: api_token.clone()
-                                                }))
-                                                .send().unwrap());
+        let challenge_stream = BufReader::new(
+            client
+                .get("https://lichess.org/api/stream/event")
+                .header(Authorization(Bearer {
+                    token: api_token.clone(),
+                }))
+                .send()
+                .unwrap(),
+        );
         for line in challenge_stream.lines() {
             let line = line.unwrap();
             if line.is_empty() {
@@ -159,11 +171,16 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                 Event::challenge(challenge_outer) => {
                     let challenge_id = challenge_outer.challenge.id;
                     if !challenge_outer.challenge.rated {
-                        let challenge_accept_res = client.post(&format!("https://lichess.org/api/challenge/{}/accept", challenge_id))
-                                                        .header(Authorization(Bearer {
-                                                            token: api_token.clone()
-                                                        }))
-                                                        .send().unwrap();
+                        let challenge_accept_res = client
+                            .post(&format!(
+                                "https://lichess.org/api/challenge/{}/accept",
+                                challenge_id
+                            ))
+                            .header(Authorization(Bearer {
+                                token: api_token.clone(),
+                            }))
+                            .send()
+                            .unwrap();
                         if challenge_accept_res.status() != StatusCode::Ok {
                             out_handle.write(b"Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.\n");
                         }
@@ -171,11 +188,18 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                 }
                 Event::gameStart(game_outer) => {
                     let game_id = game_outer.game.id;
-                    let game_stream = BufReader::new(client.get(&format!("https://lichess.org/api/bot/game/stream/{}", game_id))
-                                                        .header(Authorization(Bearer {
-                                                            token: api_token.clone()
-                                                        }))
-                                                        .send().unwrap());
+                    let game_stream = BufReader::new(
+                        client
+                            .get(&format!(
+                                "https://lichess.org/api/bot/game/stream/{}",
+                                game_id
+                            ))
+                            .header(Authorization(Bearer {
+                                token: api_token.clone(),
+                            }))
+                            .send()
+                            .unwrap(),
+                    );
                     let mut we_are_white = None;
                     for line in game_stream.lines() {
                         let line = line.unwrap();
@@ -192,46 +216,70 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                                 }
                                 write!(&mut out_handle, "{:?}", full_game.state.moves);
                                 out_handle.flush();
-                                sender.send(InterfaceMessage::BoardState(full_game.state.moves.clone())).unwrap();
-                                if full_game.state.moves.split_whitespace().count() % 2 == 0 && we_are_white.unwrap() {
+                                sender
+                                    .send(InterfaceMessage::BoardState(
+                                        full_game.state.moves.clone(),
+                                    ))
+                                    .unwrap();
+                                if full_game.state.moves.split_whitespace().count() % 2 == 0
+                                    && we_are_white.unwrap()
+                                {
                                     sender.send(InterfaceMessage::Go(3)).unwrap();
                                     out_handle.write(b"our move!\n");
                                     out_handle.flush();
                                     let engine_move = match receiver.recv().unwrap() {
-                                        EngineMessage::BestMove(a_move) => {
-                                            a_move
-                                        }
+                                        EngineMessage::BestMove(a_move) => a_move,
                                     };
-                                    let make_move_res = client.post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, engine_move))
-                                                    .header(Authorization(Bearer {
-                                                        token: api_token.clone()
-                                                    }))
-                                                    .send().unwrap();
+                                    let make_move_res = client
+                                        .post(&format!(
+                                            "https://lichess.org/api/bot/game/{}/move/{}",
+                                            game_id, engine_move
+                                        ))
+                                        .header(Authorization(Bearer {
+                                            token: api_token.clone(),
+                                        }))
+                                        .send()
+                                        .unwrap();
                                     if make_move_res.status() != StatusCode::Ok {
-                                        write!(&mut err_handle, "tried to make move {} and it was rejected\n", engine_move);
+                                        write!(
+                                            &mut err_handle,
+                                            "tried to make move {} and it was rejected\n",
+                                            engine_move
+                                        );
                                         err_handle.flush();
                                         panic!();
                                     }
                                 }
                             }
                             GameEvent::gameState(game_state) => {
-                                sender.send(InterfaceMessage::BoardState(game_state.moves.clone())).unwrap();
-                                if game_state.moves.split_whitespace().count() % 2 == 0 && we_are_white.unwrap() {
+                                sender
+                                    .send(InterfaceMessage::BoardState(game_state.moves.clone()))
+                                    .unwrap();
+                                if game_state.moves.split_whitespace().count() % 2 == 0
+                                    && we_are_white.unwrap()
+                                {
                                     sender.send(InterfaceMessage::Go(3)).unwrap();
                                     out_handle.write(b"our move!\n");
                                     out_handle.flush();
                                     let engine_move = match receiver.recv().unwrap() {
-                                        EngineMessage::BestMove(a_move) => {
-                                            a_move
-                                        }
+                                        EngineMessage::BestMove(a_move) => a_move,
                                     };
-                                    let make_move_res = client.post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, engine_move))
-                                                    .header(Authorization(Bearer {
-                                                        token: api_token.clone()
-                                                    }))
-                                                    .send().unwrap();
+                                    let make_move_res = client
+                                        .post(&format!(
+                                            "https://lichess.org/api/bot/game/{}/move/{}",
+                                            game_id, engine_move
+                                        ))
+                                        .header(Authorization(Bearer {
+                                            token: api_token.clone(),
+                                        }))
+                                        .send()
+                                        .unwrap();
                                     if make_move_res.status() != StatusCode::Ok {
-                                        write!(&mut err_handle, "tried to make move {} and it was rejected\n", engine_move);
+                                        write!(
+                                            &mut err_handle,
+                                            "tried to make move {} and it was rejected\n",
+                                            engine_move
+                                        );
                                         err_handle.flush();
                                         panic!();
                                     }
@@ -239,14 +287,20 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                             }
                             GameEvent::chatLine(chat_line) => {
                                 if chat_line.room == "player" && chat_line.username != username {
-                                    let chat_saying = ::rand::thread_rng().choose(&RESPONSES).unwrap();
+                                    let chat_saying =
+                                        ::rand::thread_rng().choose(&RESPONSES).unwrap();
                                     let body = [("room", "player"), ("text", chat_saying)];
-                                    let challenge_accept_res = client.post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
-                                                    .header(Authorization(Bearer {
-                                                        token: api_token.clone()
-                                                    }))
-                                                    .form(&body)
-                                                    .send().unwrap();
+                                    let challenge_accept_res = client
+                                        .post(&format!(
+                                            "https://lichess.org/api/bot/game/{}/chat",
+                                            game_id
+                                        ))
+                                        .header(Authorization(Bearer {
+                                            token: api_token.clone(),
+                                        }))
+                                        .form(&body)
+                                        .send()
+                                        .unwrap();
                                 }
                             }
                         }

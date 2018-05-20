@@ -1,9 +1,12 @@
-use std;
-use std::sync::mpsc;
 use board::{Board, Move};
 use messages::{EngineMessage, InterfaceMessage};
+use std;
+use std::sync::mpsc;
 
-pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
+pub(crate) fn start(
+    receiver: mpsc::Receiver<InterfaceMessage>,
+    sender: mpsc::Sender<EngineMessage>,
+) {
     let mut board = Board::from_start();
     loop {
         match receiver.recv().unwrap() {
@@ -38,10 +41,9 @@ fn search(depth: u64, board: Board) -> (i64, Option<Move>) {
     (max, best_move)
 }
 
-
 fn nega_max(depth: u64, board: Board) -> i64 {
     if depth == 0 {
-        return evaluate(board)
+        return evaluate(board);
     }
     let mut max: i64 = std::i64::MIN;
     let moves = board.gen_moves();

@@ -27,7 +27,7 @@ use structopt::StructOpt;
 struct Opt {
     /// Username for a bot account on lichess. Turns Lichess mode on, and UCI will be disabled
     #[structopt(long = "lichess-username")]
-    lichess_username: Option<String>
+    lichess_username: Option<String>,
 }
 
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
 
     let (ite_tx, ite_rx) = mpsc::channel(); // Interface to Engine
     let (eti_tx, eti_rx) = mpsc::channel(); // Engine to Interface
-    thread::spawn(move|| {
+    thread::spawn(move || {
         engine::start(ite_rx, eti_tx);
     });
 
