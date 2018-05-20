@@ -320,7 +320,9 @@ impl Board {
             en_passant_square = Some(a_move.destination - 8)
           }
         }
-        _ => {}
+        _ => {
+          // No special treatment needed
+        }
       } 
     }
 
@@ -336,8 +338,6 @@ impl Board {
         black_queenside_castle = false;
       }
     }
-
-    // If pawn
 
     Board {
       squares: new_squares,
@@ -847,6 +847,9 @@ mod tests {
   fn algebraic_to_moves() {
     assert_eq!("e2e4".parse::<Move>(), Ok(Move { origin: 52, destination: 36, promotion: None }));
     assert_eq!("a7a8q".parse::<Move>(), Ok(Move { origin: 8, destination: 0, promotion: Some(PromotionTarget::Queen) }));
+    assert_eq!("a7a8n".parse::<Move>(), Ok(Move { origin: 8, destination: 0, promotion: Some(PromotionTarget::Knight) }));
+    assert_eq!("a7a8b".parse::<Move>(), Ok(Move { origin: 8, destination: 0, promotion: Some(PromotionTarget::Bishop) }));
+    assert_eq!("a7a8r".parse::<Move>(), Ok(Move { origin: 8, destination: 0, promotion: Some(PromotionTarget::Rook) }));
   }
 
   #[test]
@@ -880,7 +883,7 @@ mod tests {
 
   #[test]
   fn move_gen_test() {
-    // To be replaced by a more thorough perft
+    // TODO To be replaced by a more thorough perft
     let mut a = Board::from_start();
     assert_eq!(a.gen_moves().len(), 20);
     a = a.apply_move("e2e4".parse().unwrap());
