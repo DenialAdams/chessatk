@@ -2,6 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const PROMOTION_TARGETS: [PromotionTarget; 4] = [PromotionTarget::Knight, PromotionTarget::Bishop, PromotionTarget::Rook, PromotionTarget::Queen];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Square {
@@ -402,6 +403,16 @@ impl Board {
                         if i >= 8 && i <= 15 {
                             // CAPTURE + PROMOTION
                             // NORMAL MOVEMENT + PROMOTION
+                            if self.squares[i.wrapping_sub(8) as usize] == Square::Empty {
+                                for promotion_target in PROMOTION_TARGETS.iter() {
+                                    let a_move = Move {
+                                        origin: i,
+                                        destination: i.wrapping_sub(8),
+                                        promotion: Some(*promotion_target),
+                                    };
+                                    results.push((a_move, self.apply_move(a_move)))
+                                }
+                            }
                         } else {
                             // CAPTURE (+ EN-PASSANT)
                             {
@@ -674,6 +685,16 @@ impl Board {
                         if i >= 48 && i <= 55 {
                             // CAPTURE + PROMOTION
                             // NORMAL MOVEMENT + PROMOTION
+                            if self.squares[(i + 8) as usize] == Square::Empty {
+                                for promotion_target in PROMOTION_TARGETS.iter() {
+                                    let a_move = Move {
+                                        origin: i,
+                                        destination: i + 8,
+                                        promotion: Some(*promotion_target),
+                                    };
+                                    results.push((a_move, self.apply_move(a_move)))
+                                }
+                            }
                         } else {
                             // CAPTURE (+ EN-PASSANT)
                             {
