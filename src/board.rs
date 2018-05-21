@@ -459,7 +459,88 @@ impl Board {
                             results.push((a_move, self.apply_move(a_move)))
                         }
                     }
-                    Square::WhiteBishop => {}
+                    Square::WhiteBishop => {
+                      {
+                        let mut x = 7;
+                        let mut last_col = (i + x) % 8;
+                        while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
+                          if self.squares[(i + x) as usize].is_white_piece() {
+                            break;
+                          }
+                          let a_move = Move {
+                            origin: i,
+                            destination: i + x,
+                            promotion: None,
+                          };
+                          results.push((a_move, self.apply_move(a_move)));
+                          if self.squares[(i + x) as usize].is_black_piece() {
+                            break;
+                          }
+                          last_col = (i + x) % 8;
+                          x *= 2;
+                        }
+                      }
+                      {
+                        let mut x = 7;
+                        let mut last_col = i.wrapping_sub(x) % 8;
+                        while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
+                          if self.squares[i.wrapping_sub(x) as usize].is_white_piece() {
+                            break;
+                          }
+                          let a_move = Move {
+                            origin: i,
+                            destination: i.wrapping_sub(x),
+                            promotion: None,
+                          };
+                          results.push((a_move, self.apply_move(a_move)));
+                          if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                            break;
+                          }
+                          last_col = i.wrapping_sub(x) % 8;
+                          x *= 2;
+                        }
+                      }
+                      {
+                        let mut x = 9;
+                        let mut last_col = (i + x) % 8;
+                        while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
+                          if self.squares[(i + x) as usize].is_white_piece() {
+                            break;
+                          }
+                          let a_move = Move {
+                            origin: i,
+                            destination: i + x,
+                            promotion: None,
+                          };
+                          results.push((a_move, self.apply_move(a_move)));
+                          if self.squares[(i + x) as usize].is_black_piece() {
+                            break;
+                          }
+                          last_col = (i + x) % 8;
+                          x *= 2;
+                        }
+                      }
+                      {
+                        let mut x = 9;
+                        let mut last_col = i.wrapping_sub(x) % 8;
+                        while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
+                          if self.squares[i.wrapping_sub(x) as usize].is_white_piece() {
+                            break;
+                          }
+                          let a_move = Move {
+                            origin: i,
+                            destination: i.wrapping_sub(x),
+                            promotion: None,
+                          };
+                          results.push((a_move, self.apply_move(a_move)));
+                          if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                            break;
+                          }
+                          last_col = i.wrapping_sub(x) % 8;
+                          x *= 2;
+                        }
+                      }
+                    }
                     Square::WhiteRook => {
                         let original_col = i % 8;
                         // Down

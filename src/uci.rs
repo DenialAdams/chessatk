@@ -3,8 +3,8 @@ use std::io::{self, BufRead, Write};
 use std::sync::mpsc;
 
 pub(crate) fn main_loop(
-    sender: mpsc::Sender<InterfaceMessage>,
-    receiver: mpsc::Receiver<EngineMessage>,
+    _sender: mpsc::Sender<InterfaceMessage>,
+    _receiver: mpsc::Receiver<EngineMessage>,
 ) {
     let stdin = io::stdin();
     let mut in_handle = stdin.lock();
