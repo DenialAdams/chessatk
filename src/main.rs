@@ -26,8 +26,8 @@ use structopt::StructOpt;
 #[structopt(name = "chessatk")]
 struct Opt {
     /// Username for a bot account on lichess. Turns Lichess mode on, and UCI will be disabled
-    #[structopt(long = "lichess-username")]
-    lichess_username: Option<String>,
+    #[structopt(short = "l", long = "lichess")]
+    lichess: bool,
 }
 
 fn main() {
@@ -39,7 +39,7 @@ fn main() {
         engine::start(ite_rx, eti_tx);
     });
 
-    if let Some(_) = opt.lichess_username {
+    if opt.lichess {
         lichess::main_loop(ite_tx, eti_rx)
     } else {
         uci::main_loop(ite_tx, eti_rx)
