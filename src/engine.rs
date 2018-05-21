@@ -15,7 +15,9 @@ pub(crate) fn start(
             }
             InterfaceMessage::Go(depth) => {
                 let (_eval, best_move) = search(depth, board.clone());
-                sender.send(EngineMessage::BestMove(best_move.unwrap())).unwrap();
+                sender
+                    .send(EngineMessage::BestMove(best_move.unwrap()))
+                    .unwrap();
             }
         }
         //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
