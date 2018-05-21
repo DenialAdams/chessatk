@@ -462,7 +462,7 @@ impl Board {
                     Square::WhiteBishop => {
                         {
                             let mut x = 7;
-                            let mut last_col = (i + x) % 8;
+                            let mut last_col = i % 8;
                             while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
                                 if self.squares[(i + x) as usize].is_white_piece() {
                                     break;
@@ -482,7 +482,7 @@ impl Board {
                         }
                         {
                             let mut x = 7;
-                            let mut last_col = i.wrapping_sub(x) % 8;
+                            let mut last_col = i % 8;
                             while i.wrapping_sub(x) < 64
                                 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1
                             {
@@ -504,7 +504,7 @@ impl Board {
                         }
                         {
                             let mut x = 9;
-                            let mut last_col = (i + x) % 8;
+                            let mut last_col = i % 8;
                             while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
                                 if self.squares[(i + x) as usize].is_white_piece() {
                                     break;
@@ -524,7 +524,7 @@ impl Board {
                         }
                         {
                             let mut x = 9;
-                            let mut last_col = i.wrapping_sub(x) % 8;
+                            let mut last_col = i % 8;
                             while i.wrapping_sub(x) < 64
                                 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1
                             {
@@ -1090,6 +1090,8 @@ mod tests {
         assert_eq!(a.gen_moves().len(), 20);
         a = a.apply_move("e2e4".parse().unwrap());
         assert_eq!(a.gen_moves().len(), 20);
+        a = Board::from_moves("g2g4 e7e5").unwrap();
+        assert_eq!(a.gen_moves().len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
     }
 
     #[test]
