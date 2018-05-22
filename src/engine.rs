@@ -29,7 +29,7 @@ pub(crate) fn start(
 fn search(depth: u64, board: Board) -> (i64, Option<Move>) {
     let mut max: i64 = std::i64::MIN;
     let mut best_move = None;
-    let moves = board.gen_moves();
+    let moves = board.gen_moves(true);
     if moves.is_empty() {
         max = 0;
     }
@@ -48,7 +48,7 @@ fn nega_max(depth: u64, board: Board) -> i64 {
         return evaluate(board);
     }
     let mut max: i64 = std::i64::MIN;
-    let moves = board.gen_moves();
+    let moves = board.gen_moves(true);
     if moves.is_empty() {
         max = 0;
     }
