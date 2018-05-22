@@ -2,7 +2,12 @@ use std::fmt;
 use std::str::FromStr;
 
 const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const PROMOTION_TARGETS: [PromotionTarget; 4] = [PromotionTarget::Knight, PromotionTarget::Bishop, PromotionTarget::Rook, PromotionTarget::Queen];
+const PROMOTION_TARGETS: [PromotionTarget; 4] = [
+    PromotionTarget::Knight,
+    PromotionTarget::Bishop,
+    PromotionTarget::Rook,
+    PromotionTarget::Queen,
+];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Square {
@@ -471,163 +476,15 @@ impl Board {
                         }
                     }
                     Square::WhiteBishop => {
-                        {
-                            let mut x = 7;
-                            let mut last_col = i % 8;
-                            while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-                                if self.squares[(i + x) as usize].is_white_piece() {
-                                    break;
-                                }
-                                let a_move = Move {
-                                    origin: i,
-                                    destination: i + x,
-                                    promotion: None,
-                                };
-                                results.push((a_move, self.apply_move(a_move)));
-                                if self.squares[(i + x) as usize].is_black_piece() {
-                                    break;
-                                }
-                                last_col = (i + x) % 8;
-                                x *= 2;
-                            }
-                        }
-                        {
-                            let mut x = 7;
-                            let mut last_col = i % 8;
-                            while i.wrapping_sub(x) < 64
-                                && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1
-                            {
-                                if self.squares[i.wrapping_sub(x) as usize].is_white_piece() {
-                                    break;
-                                }
-                                let a_move = Move {
-                                    origin: i,
-                                    destination: i.wrapping_sub(x),
-                                    promotion: None,
-                                };
-                                results.push((a_move, self.apply_move(a_move)));
-                                if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
-                                    break;
-                                }
-                                last_col = i.wrapping_sub(x) % 8;
-                                x *= 2;
-                            }
-                        }
-                        {
-                            let mut x = 9;
-                            let mut last_col = i % 8;
-                            while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-                                if self.squares[(i + x) as usize].is_white_piece() {
-                                    break;
-                                }
-                                let a_move = Move {
-                                    origin: i,
-                                    destination: i + x,
-                                    promotion: None,
-                                };
-                                results.push((a_move, self.apply_move(a_move)));
-                                if self.squares[(i + x) as usize].is_black_piece() {
-                                    break;
-                                }
-                                last_col = (i + x) % 8;
-                                x *= 2;
-                            }
-                        }
-                        {
-                            let mut x = 9;
-                            let mut last_col = i % 8;
-                            while i.wrapping_sub(x) < 64
-                                && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1
-                            {
-                                if self.squares[i.wrapping_sub(x) as usize].is_white_piece() {
-                                    break;
-                                }
-                                let a_move = Move {
-                                    origin: i,
-                                    destination: i.wrapping_sub(x),
-                                    promotion: None,
-                                };
-                                results.push((a_move, self.apply_move(a_move)));
-                                if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
-                                    break;
-                                }
-                                last_col = i.wrapping_sub(x) % 8;
-                                x *= 2;
-                            }
-                        }
+                        white_bishop_movegen(i, &self.squares, &self, &mut results);
                     }
                     Square::WhiteRook => {
-                        let original_col = i % 8;
-                        // Down
-                        let mut x = 8;
-                        while i.wrapping_sub(x) < 64 {
-                            if self.squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
-                                break;
-                            }
-                            let a_move = Move {
-                                origin: i,
-                                destination: i.wrapping_sub(x),
-                                promotion: None,
-                            };
-                            results.push((a_move, self.apply_move(a_move)));
-                            if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
-                                break;
-                            }
-                            x += 8
-                        }
-                        // Up
-                        x = 8;
-                        while i + x < 64 {
-                            if self.squares[(i + x) as usize].is_white_piece() {
-                                break;
-                            }
-                            let a_move = Move {
-                                origin: i,
-                                destination: i + x,
-                                promotion: None,
-                            };
-                            results.push((a_move, self.apply_move(a_move)));
-                            if self.squares[(i + x) as usize].is_black_piece() {
-                                break;
-                            }
-                            x += 8
-                        }
-                        // Right
-                        x = 1;
-                        while i + x < 64 && (i + x) % 8 > original_col {
-                            if self.squares[(i + x) as usize].is_white_piece() {
-                                break;
-                            }
-                            let a_move = Move {
-                                origin: i,
-                                destination: i + x,
-                                promotion: None,
-                            };
-                            results.push((a_move, self.apply_move(a_move)));
-                            if self.squares[(i + x) as usize].is_black_piece() {
-                                break;
-                            }
-                            x += 1
-                        }
-                        // Left
-                        x = 1;
-                        while i.wrapping_sub(x) < 64 && i.wrapping_sub(x) % 8 < original_col {
-                            if self.squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
-                                break;
-                            }
-                            let a_move = Move {
-                                origin: i,
-                                destination: i.wrapping_sub(x),
-                                promotion: None,
-                            };
-                            results.push((a_move, self.apply_move(a_move)));
-                            if self.squares[i.wrapping_sub(x) as usize].is_black_piece() {
-                                break;
-                            }
-                            x += 1
-                        }
+                        white_rook_movegen(i, &self.squares, &self, &mut results);
                     }
-                    Square::WhiteQueen => {}
+                    Square::WhiteQueen => {
+                        white_bishop_movegen(i, &self.squares, &self, &mut results);
+                        white_rook_movegen(i, &self.squares, &self, &mut results);
+                    }
                     Square::WhiteKing => {
                         let pot_squares = [
                             i + 1,
@@ -1008,6 +865,179 @@ impl Board {
             halfmove_clock: halfmove_clock,
             fullmove_number: fullmove_number,
         })
+    }
+}
+
+#[inline(always)]
+fn white_bishop_movegen(
+    origin: u8,
+    squares: &[Square; 64],
+    cur_board: &Board,
+    results: &mut Vec<(Move, Board)>,
+) {
+    let i = origin;
+    {
+        let mut x = 7;
+        let mut last_col = i % 8;
+        while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
+            if squares[(i + x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i + x,
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[(i + x) as usize].is_black_piece() {
+                break;
+            }
+            last_col = (i + x) % 8;
+            x *= 2;
+        }
+    }
+    {
+        let mut x = 7;
+        let mut last_col = i % 8;
+        while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
+            if squares[i.wrapping_sub(x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i.wrapping_sub(x),
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                break;
+            }
+            last_col = i.wrapping_sub(x) % 8;
+            x *= 2;
+        }
+    }
+    {
+        let mut x = 9;
+        let mut last_col = i % 8;
+        while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
+            if squares[(i + x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i + x,
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[(i + x) as usize].is_black_piece() {
+                break;
+            }
+            last_col = (i + x) % 8;
+            x *= 2;
+        }
+    }
+    {
+        let mut x = 9;
+        let mut last_col = i % 8;
+        while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
+            if squares[i.wrapping_sub(x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i.wrapping_sub(x),
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                break;
+            }
+            last_col = i.wrapping_sub(x) % 8;
+            x *= 2;
+        }
+    }
+}
+
+#[inline(always)]
+fn white_rook_movegen(
+    origin: u8,
+    squares: &[Square; 64],
+    cur_board: &Board,
+    results: &mut Vec<(Move, Board)>,
+) {
+    let i = origin;
+    let original_col = i % 8;
+    {
+        let mut x = 8;
+        while i.wrapping_sub(x) < 64 {
+            if squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i.wrapping_sub(x),
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                break;
+            }
+            x += 8
+        }
+    }
+    {
+        let mut x = 8;
+        while i + x < 64 {
+            if squares[(i + x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i + x,
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[(i + x) as usize].is_black_piece() {
+                break;
+            }
+            x += 8
+        }
+    }
+    {
+        let mut x = 1;
+        while i + x < 64 && (i + x) % 8 > original_col {
+            if squares[(i + x) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i + x,
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[(i + x) as usize].is_black_piece() {
+                break;
+            }
+            x += 1
+        }
+    }
+    {
+        let mut x = 1;
+        while i.wrapping_sub(x) < 64 && i.wrapping_sub(x) % 8 < original_col {
+            if squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
+                break;
+            }
+            let a_move = Move {
+                origin: i,
+                destination: i.wrapping_sub(x),
+                promotion: None,
+            };
+            results.push((a_move, cur_board.apply_move(a_move)));
+            if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+                break;
+            }
+            x += 1
+        }
     }
 }
 

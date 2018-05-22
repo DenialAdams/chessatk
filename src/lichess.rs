@@ -2,6 +2,7 @@ use hyper::header::{Authorization, Bearer, Headers};
 use messages::{EngineMessage, InterfaceMessage};
 use rand::Rng;
 use reqwest::{self, StatusCode};
+use std::env;
 use std::io::{self, BufRead, BufReader, Write};
 use std::sync::mpsc;
 
@@ -103,21 +104,41 @@ pub(crate) fn main_loop(
     let mut out_handle = stdout.lock();
     let mut err_handle = stderr.lock();
 
-    let api_token: Result<String, io::Error> = do catch {
-        let stdin = io::stdin();
-        let mut in_handle = stdin.lock();
-        let mut line_buf = String::new();
-
-        out_handle.write(b"Lichess API token: ")?;
-        out_handle.flush()?;
-
-        let _ = in_handle.read_line(&mut line_buf)?;
-        let _ = line_buf.pop();
-
-        line_buf
+    let env_api_token = match env::var("LICHESS_API_TOKEN") {
+        Ok(token) => Some(token),
+        Err(env::VarError::NotPresent) => {
+            // Cool, move on
+            None
+        }
+        Err(env::VarError::NotUnicode(_)) => {
+            // TODO WARN
+            out_handle.write(b"WARN: Lichess API token environment variable found, but with invalid unicode. Ignoring.\n");
+            None
+        }
     };
 
-    let api_token = api_token.unwrap();
+    let api_token = {
+        if let Some(token) = env_api_token {
+            out_handle
+                .write(b"Found lichess api token in environment, using that and proceeding.\n");
+            token
+        } else {
+            let api_token: Result<String, io::Error> = do catch {
+                let stdin = io::stdin();
+                let mut in_handle = stdin.lock();
+                let mut line_buf = String::new();
+
+                out_handle.write(b"Lichess API token: ")?;
+                out_handle.flush()?;
+
+                let _ = in_handle.read_line(&mut line_buf)?;
+                let _ = line_buf.pop();
+
+                line_buf
+            };
+            api_token.unwrap()
+        }
+    };
 
     let client = reqwest::Client::new();
     let user: User = client
