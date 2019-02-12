@@ -4,6 +4,9 @@ edition = "2018"
 version = "0.1.0"
 authors = ["Richard McCormack <brick@brick.codes>"]
 
+[profile.release]
+debug = true
+
 [dependencies]
 hyper = "0.12"
 rand = "0.6"
@@ -11,3 +14,5 @@ reqwest = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 structopt = "0.2"
+log = "0.4"
+pretty_env_logger = "0.3"

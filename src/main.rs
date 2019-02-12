@@ -21,6 +21,7 @@ struct Opt {
 }
 
 fn main() {
+   pretty_env_logger::init();
    let opt = Opt::from_args();
 
    let (ite_tx, ite_rx) = mpsc::channel(); // Interface to Engine

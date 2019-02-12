@@ -28,17 +28,20 @@ fn search(depth: u64, board: Board) -> (i64, Option<Move>) {
    if moves.is_empty() {
       max = 0;
    }
+   let mut nodes_expanded = 1;
+   let mut nodes_generated = moves.len() as u64;
    for (a_move, new_board) in moves {
-      let score: i64 = -nega_max(depth - 1, new_board);
+      let score: i64 = -nega_max(depth - 1, new_board, &mut nodes_expanded, &mut nodes_generated);
       if score > max {
          max = score;
          best_move = Some(a_move);
       }
    }
+   println!("nodes generated: {} nodes expanded: {}", nodes_generated, nodes_expanded);
    (max, best_move)
 }
 
-fn nega_max(depth: u64, board: Board) -> i64 {
+fn nega_max(depth: u64, board: Board, nodes_expanded: &mut u64, nodes_generated: &mut u64) -> i64 {
    if depth == 0 {
       return evaluate(board);
    }
@@ -47,8 +50,10 @@ fn nega_max(depth: u64, board: Board) -> i64 {
    if moves.is_empty() {
       max = 0;
    }
+   *nodes_expanded += 1;
+   *nodes_generated += moves.len() as u64;
    for (_, new_board) in moves {
-      let score: i64 = -nega_max(depth - 1, new_board);
+      let score: i64 = -nega_max(depth - 1, new_board, nodes_expanded, nodes_generated);
       if score > max {
          max = score;
       }
@@ -57,12 +62,14 @@ fn nega_max(depth: u64, board: Board) -> i64 {
 }
 
 fn evaluate(board: Board) -> i64 {
-   let num_white_squares = board.squares.iter().filter(|x| x.is_white_piece()).count();
-   let num_black_squares = board.squares.iter().filter(|x| x.is_black_piece()).count();
+   use crate::board::Color;
+
+   let num_white_squares = board.squares.iter().filter(|x| x.color() == Some(Color::White)).count();
+   let num_black_squares = board.squares.iter().filter(|x| x.color() == Some(Color::Black)).count();
    let eval = num_white_squares as i64 - num_black_squares as i64;
-   if board.white_to_move {
+   if board.side_to_move == Color::White {
       eval
    } else {
-      !eval
+      -eval
    }
 }

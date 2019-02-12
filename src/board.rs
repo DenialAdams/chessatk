@@ -26,40 +26,51 @@ pub enum Square {
    WhiteKing,
 }
 
-impl Square {
-   pub fn is_white_piece(self) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Color {
+   Black,
+   White
+}
+
+impl std::ops::Not for Color {
+   type Output = Color;
+   fn not(self) -> Color {
       match self {
-         Square::Empty
-         | Square::BlackPawn
-         | Square::BlackKnight
-         | Square::BlackBishop
-         | Square::BlackRook
-         | Square::BlackQueen
-         | Square::BlackKing => false,
-         Square::WhitePawn
-         | Square::WhiteKnight
-         | Square::WhiteBishop
-         | Square::WhiteRook
-         | Square::WhiteQueen
-         | Square::WhiteKing => true,
+         Color::Black => Color::White,
+         Color::White => Color::Black,
+      }
+   }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Piece {
+   Empty,
+   Pawn,
+   Knight,
+   Bishop,
+   Rook,
+   Queen,
+   King
+}
+
+impl Square {
+   pub fn piece(self) -> Piece {
+      match self {
+         Square::Empty => Piece::Empty,
+         Square::BlackPawn | Square::WhitePawn => Piece::Pawn,
+         Square::BlackKnight | Square::WhiteKnight => Piece::Knight,
+         Square::BlackBishop | Square::WhiteBishop => Piece::Bishop,
+         Square::BlackRook | Square::WhiteRook => Piece::Rook,
+         Square::BlackQueen | Square::WhiteQueen => Piece::Queen,
+         Square::BlackKing | Square::WhiteKing => Piece::King,
       }
    }
 
-   pub fn is_black_piece(self) -> bool {
+   pub fn color(self) -> Option<Color> {
       match self {
-         Square::Empty
-         | Square::WhitePawn
-         | Square::WhiteKnight
-         | Square::WhiteBishop
-         | Square::WhiteRook
-         | Square::WhiteQueen
-         | Square::WhiteKing => false,
-         Square::BlackPawn
-         | Square::BlackKnight
-         | Square::BlackBishop
-         | Square::BlackRook
-         | Square::BlackQueen
-         | Square::BlackKing => true,
+         Square::Empty => None,
+         Square::WhitePawn | Square::WhiteKnight | Square::WhiteBishop | Square::WhiteRook | Square::WhiteQueen | Square::WhiteKing => Some(Color::White),
+         Square::BlackPawn | Square::BlackKnight | Square::BlackBishop | Square::BlackRook | Square::BlackQueen | Square::BlackKing => Some(Color::Black)
       }
    }
 }
@@ -105,7 +116,7 @@ pub struct Board {
    pub white_queenside_castle: bool,
    pub black_kingside_castle: bool,
    pub black_queenside_castle: bool,
-   pub white_to_move: bool,
+   pub side_to_move: Color,
    pub en_passant_square: Option<u8>,
    pub halfmove_clock: u64,
    pub fullmove_number: u64,
@@ -244,7 +255,7 @@ impl Board {
       };
 
       // Fullmove number
-      let new_fullmove_number = if self.white_to_move {
+      let new_fullmove_number = if self.side_to_move == Color::White {
          self.fullmove_number
       } else {
          self.fullmove_number + 1
@@ -255,7 +266,7 @@ impl Board {
       {
          if let Some(promotion_target) = a_move.promotion {
             // Handle promotion
-            let new_piece_white = self.squares[a_move.origin as usize].is_white_piece();
+            let new_piece_white = self.squares[a_move.origin as usize].color() == Some(Color::White);
             match promotion_target {
                PromotionTarget::Knight => {
                   if new_piece_white {
@@ -364,7 +375,7 @@ impl Board {
          white_queenside_castle,
          black_kingside_castle,
          black_queenside_castle,
-         white_to_move: !self.white_to_move,
+         side_to_move: !self.side_to_move,
          en_passant_square,
          halfmove_clock: new_halfmove_clock,
          fullmove_number: new_fullmove_number,
@@ -372,85 +383,25 @@ impl Board {
    }
 
    pub fn gen_moves(&self, do_check_checking: bool) -> Vec<(Move, Board)> {
-      if self.white_to_move {
-         self.gen_white_moves(do_check_checking)
-      } else {
-         self.gen_black_moves(do_check_checking)
-      }
+      self.gen_moves_color(self.side_to_move, do_check_checking)
    }
 
-   fn gen_white_moves(&self, do_check_checking: bool) -> Vec<(Move, Board)> {
+   fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<(Move, Board)> {
       let mut results = Vec::new();
-      for (i, square) in self.squares.iter().enumerate() {
+      for (i, square) in self.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(color)) {
          let i = i as u8;
-         match square {
-            Square::WhitePawn => {
-               if i >= 48 && i <= 55 {
-                  // 2 SQUARE MOVEMENT
-                  if self.squares[(i - 16) as usize] == Square::Empty {
-                     let a_move = Move {
-                        origin: i,
-                        destination: i - 16,
-                        promotion: None,
-                     };
-                     let new_board = self.apply_move(a_move);
-                     if !do_check_checking || !new_board.white_in_check() {
-                        results.push((a_move, new_board))
-                     }
+         match square.piece() {
+            Piece::Pawn => {
+               match color {
+                  Color::White => {
+                     white_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
                   }
-               }
-               if i >= 8 && i <= 15 {
-                  // CAPTURE + PROMOTION
-                  // NORMAL MOVEMENT + PROMOTION
-                  if self.squares[i.wrapping_sub(8) as usize] == Square::Empty {
-                     for promotion_target in PROMOTION_TARGETS.iter() {
-                        let a_move = Move {
-                           origin: i,
-                           destination: i.wrapping_sub(8),
-                           promotion: Some(*promotion_target),
-                        };
-                        let new_board = self.apply_move(a_move);
-                        if !do_check_checking || !new_board.white_in_check() {
-                           results.push((a_move, new_board))
-                        }
-                     }
-                  }
-               } else {
-                  // CAPTURE (+ EN-PASSANT)
-                  {
-                     let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
-                     for pot_square in pot_squares
-                        .iter()
-                        .filter(|x| **x < 64)
-                        .filter(|x| self.squares[**x as usize].is_black_piece() || self.en_passant_square == Some(**x))
-                        .filter(|x| abs_diff(i % 8, **x % 8) == 1)
-                     {
-                        let a_move = Move {
-                           origin: i,
-                           destination: *pot_square,
-                           promotion: None,
-                        };
-                        let new_board = self.apply_move(a_move);
-                        if !do_check_checking || !new_board.white_in_check() {
-                           results.push((a_move, new_board))
-                        }
-                     }
-                  }
-                  // NORMAL MOVEMENT
-                  if self.squares[i.wrapping_sub(8) as usize] == Square::Empty {
-                     let a_move = Move {
-                        origin: i,
-                        destination: i.wrapping_sub(8),
-                        promotion: None,
-                     };
-                     let new_board = self.apply_move(a_move);
-                     if !do_check_checking || !new_board.white_in_check() {
-                        results.push((a_move, new_board))
-                     }
+                  Color::Black => {
+                     black_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
                   }
                }
             }
-            Square::WhiteKnight => {
+            Piece::Knight => {
                let pot_squares = [
                   i + 6,
                   i + 10,
@@ -464,7 +415,7 @@ impl Board {
                for pot_square in pot_squares
                   .iter()
                   .filter(|x| **x < 64)
-                  .filter(|x| !self.squares[**x as usize].is_white_piece())
+                  .filter(|x| !(self.squares[**x as usize].color() == Some(color)))
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 2)
                {
                   let a_move = Move {
@@ -473,22 +424,22 @@ impl Board {
                      promotion: None,
                   };
                   let new_board = self.apply_move(a_move);
-                  if !do_check_checking || !new_board.white_in_check() {
+                  if !do_check_checking || !new_board.in_check(color) {
                      results.push((a_move, new_board))
                   }
                }
             }
-            Square::WhiteBishop => {
-               white_bishop_movegen(i, &self.squares, &self, &mut results, do_check_checking);
+            Piece::Bishop => {
+               bishop_movegen(i, &self.squares, color, &self, &mut results, do_check_checking);
             }
-            Square::WhiteRook => {
-               white_rook_movegen(i, &self.squares, &self, &mut results, do_check_checking);
+            Piece::Rook => {
+               rook_movegen(i, &self.squares, color, &self, &mut results, do_check_checking);
             }
-            Square::WhiteQueen => {
-               white_bishop_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-               white_rook_movegen(i, &self.squares, &self, &mut results, do_check_checking);
+            Piece::Queen => {
+               bishop_movegen(i, &self.squares, color, &self, &mut results, do_check_checking);
+               rook_movegen(i, &self.squares, color, &self, &mut results, do_check_checking);
             }
-            Square::WhiteKing => {
+            Piece::King => {
                let pot_squares = [
                   i + 1,
                   i + 7,
@@ -502,7 +453,7 @@ impl Board {
                for pot_square in pot_squares
                   .iter()
                   .filter(|x| **x < 64)
-                  .filter(|x| !self.squares[**x as usize].is_white_piece())
+                  .filter(|x| !(self.squares[**x as usize].color() == Some(color)))
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 1)
                {
                   let a_move = Move {
@@ -511,20 +462,12 @@ impl Board {
                      promotion: None,
                   };
                   let new_board = self.apply_move(a_move);
-                  if !do_check_checking || !new_board.white_in_check() {
+                  if !do_check_checking || !new_board.in_check(color) {
                      results.push((a_move, new_board))
                   }
                }
             }
-            Square::BlackPawn
-            | Square::BlackKnight
-            | Square::BlackBishop
-            | Square::BlackRook
-            | Square::BlackQueen
-            | Square::BlackKing => {
-               // White to move, nothing to do
-            }
-            Square::Empty => {
+            Piece::Empty => {
                // No moves
             }
          }
@@ -532,169 +475,17 @@ impl Board {
       results
    }
 
-   fn gen_black_moves(&self, do_check_checking: bool) -> Vec<(Move, Board)> {
-      let mut results = Vec::new();
-      for (i, square) in self.squares.iter().enumerate() {
-         let i = i as u8;
-         match square {
-            Square::BlackPawn => {
-               if i >= 8 && i <= 15 {
-                  // 2 SQUARE MOVEMENT
-                  if self.squares[(i + 16) as usize] == Square::Empty {
-                     let a_move = Move {
-                        origin: i,
-                        destination: i + 16,
-                        promotion: None,
-                     };
-                     results.push((a_move, self.apply_move(a_move)))
-                  }
-               }
-               if i >= 48 && i <= 55 {
-                  // CAPTURE + PROMOTION
-                  // NORMAL MOVEMENT + PROMOTION
-                  if self.squares[(i + 8) as usize] == Square::Empty {
-                     for promotion_target in PROMOTION_TARGETS.iter() {
-                        let a_move = Move {
-                           origin: i,
-                           destination: i + 8,
-                           promotion: Some(*promotion_target),
-                        };
-                        results.push((a_move, self.apply_move(a_move)))
-                     }
-                  }
-               } else {
-                  // CAPTURE (+ EN-PASSANT)
-                  {
-                     let pot_squares = [i + 7, i + 9];
-                     for pot_square in pot_squares
-                        .iter()
-                        .filter(|x| **x < 64)
-                        .filter(|x| self.squares[**x as usize].is_white_piece() || self.en_passant_square == Some(**x))
-                        .filter(|x| abs_diff(i % 8, **x % 8) == 1)
-                     {
-                        let a_move = Move {
-                           origin: i,
-                           destination: *pot_square,
-                           promotion: None,
-                        };
-                        results.push((a_move, self.apply_move(a_move)))
-                     }
-                  }
-                  // NORMAL MOVEMENT
-                  if self.squares[(i + 8) as usize] == Square::Empty {
-                     let a_move = Move {
-                        origin: i,
-                        destination: i + 8,
-                        promotion: None,
-                     };
-                     results.push((a_move, self.apply_move(a_move)))
-                  }
-               }
-            }
-            Square::BlackKnight => {
-               let pot_squares = [
-                  i + 6,
-                  i + 10,
-                  i + 15,
-                  i + 17,
-                  i.wrapping_sub(6),
-                  i.wrapping_sub(10),
-                  i.wrapping_sub(15),
-                  i.wrapping_sub(17),
-               ];
-               for pot_square in pot_squares
-                  .iter()
-                  .filter(|x| **x < 64)
-                  .filter(|x| !self.squares[**x as usize].is_black_piece())
-                  .filter(|x| abs_diff(i % 8, **x % 8) <= 2)
-               {
-                  let a_move = Move {
-                     origin: i,
-                     destination: *pot_square,
-                     promotion: None,
-                  };
-                  results.push((a_move, self.apply_move(a_move)))
-               }
-            }
-            Square::BlackBishop => {
-               black_bishop_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-            }
-            Square::BlackRook => {
-               black_rook_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-            }
-            Square::BlackQueen => {
-               black_bishop_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-               black_rook_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-            }
-            Square::BlackKing => {
-               let pot_squares = [
-                  i + 1,
-                  i + 7,
-                  i + 8,
-                  i + 9,
-                  i.wrapping_sub(1),
-                  i.wrapping_sub(7),
-                  i.wrapping_sub(8),
-                  i.wrapping_sub(9),
-               ];
-               for pot_square in pot_squares
-                  .iter()
-                  .filter(|x| **x < 64)
-                  .filter(|x| !self.squares[**x as usize].is_black_piece())
-                  .filter(|x| abs_diff(i % 8, **x % 8) <= 1)
-               {
-                  let a_move = Move {
-                     origin: i,
-                     destination: *pot_square,
-                     promotion: None,
-                  };
-                  results.push((a_move, self.apply_move(a_move)))
-               }
-            }
-            Square::WhitePawn
-            | Square::WhiteKnight
-            | Square::WhiteBishop
-            | Square::WhiteRook
-            | Square::WhiteQueen
-            | Square::WhiteKing => {
-               // Black to move, nothing to do
-            }
-            Square::Empty => {
-               // No moves
-            }
-         }
-      }
-      results
-   }
-
-   fn white_in_check(&self) -> bool {
-      let white_king_pos = self
+   fn in_check(&self, color: Color) -> bool {
+      let king_pos = self
          .squares
          .iter()
          .enumerate()
-         .find(|(_, x)| **x == Square::WhiteKing)
+         .find(|(_, x)| x.color() == Some(color) && x.piece() == Piece::King)
          .unwrap()
          .0 as u8;
-      let moves = self.gen_black_moves(false);
+      let moves = self.gen_moves_color(!color, false);
       for (a_move, _) in moves {
-         if a_move.destination == white_king_pos {
-            return true;
-         }
-      }
-      false
-   }
-
-   fn black_in_check(&self) -> bool {
-      let black_king_pos = self
-         .squares
-         .iter()
-         .enumerate()
-         .find(|(_, x)| **x == Square::BlackKing)
-         .unwrap()
-         .0 as u8;
-      let moves = self.gen_white_moves(false);
-      for (a_move, _) in moves {
-         if a_move.destination == black_king_pos {
+         if a_move.destination == king_pos {
             return true;
          }
       }
@@ -812,9 +603,9 @@ impl Board {
       }
 
       let to_move = fen_sections[1].as_bytes()[0];
-      let white_to_move = match to_move {
-         b'w' => true,
-         b'b' => false,
+      let side_to_move = match to_move {
+         b'w' => Color::White,
+         b'b' => Color::Black,
          _ => {
             return Err(format!(
                "malformed FEN; got unexpected byte {} (ASCII: {}) parsing player to move. Expecting one of ASCII wb",
@@ -930,7 +721,7 @@ impl Board {
          white_queenside_castle: wqc,
          black_kingside_castle: bkc,
          black_queenside_castle: bqc,
-         white_to_move,
+         side_to_move,
          en_passant_square,
          halfmove_clock,
          fullmove_number,
@@ -938,10 +729,158 @@ impl Board {
    }
 }
 
-#[inline(always)]
-fn white_bishop_movegen(
+fn white_pawn_movegen(
    origin: u8,
    squares: &[Square; 64],
+   cur_board: &Board,
+   results: &mut Vec<(Move, Board)>,
+   do_check_checking: bool,
+) {
+   let i = origin;
+   if i >= 48 && i <= 55 {
+      // 2 SQUARE MOVEMENT
+      if squares[(i - 16) as usize] == Square::Empty {
+         let a_move = Move {
+            origin: i,
+            destination: i - 16,
+            promotion: None,
+         };
+         let new_board = cur_board.apply_move(a_move);
+         if !do_check_checking || !new_board.in_check(Color::White) {
+            results.push((a_move, new_board))
+         }
+      }
+   }
+   if i >= 8 && i <= 15 {
+      // CAPTURE + PROMOTION
+      // NORMAL MOVEMENT + PROMOTION
+      if squares[i.wrapping_sub(8) as usize] == Square::Empty {
+         for promotion_target in PROMOTION_TARGETS.iter() {
+            let a_move = Move {
+               origin: i,
+               destination: i.wrapping_sub(8),
+               promotion: Some(*promotion_target),
+            };
+            let new_board = cur_board.apply_move(a_move);
+            if !do_check_checking || !new_board.in_check(Color::White) {
+               results.push((a_move, new_board))
+            }
+         }
+      }
+   } else {
+      // CAPTURE (+ EN-PASSANT)
+      {
+         let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
+         for pot_square in pot_squares
+            .iter()
+            .filter(|x| **x < 64)
+            .filter(|x| cur_board.squares[**x as usize].color() == Some(Color::Black) || cur_board.en_passant_square == Some(**x))
+            .filter(|x| abs_diff(i % 8, **x % 8) == 1)
+         {
+            let a_move = Move {
+               origin: i,
+               destination: *pot_square,
+               promotion: None,
+            };
+            let new_board = cur_board.apply_move(a_move);
+            if !do_check_checking || !new_board.in_check(Color::White) {
+               results.push((a_move, new_board))
+            }
+         }
+      }
+      // NORMAL MOVEMENT
+      if squares[i.wrapping_sub(8) as usize] == Square::Empty {
+         let a_move = Move {
+            origin: i,
+            destination: i.wrapping_sub(8),
+            promotion: None,
+         };
+         let new_board = cur_board.apply_move(a_move);
+         if !do_check_checking || !new_board.in_check(Color::White) {
+            results.push((a_move, new_board))
+         }
+      }
+   }
+}
+
+fn black_pawn_movegen(
+   origin: u8,
+   squares: &[Square; 64],
+   cur_board: &Board,
+   results: &mut Vec<(Move, Board)>,
+   do_check_checking: bool,
+) {
+   let i = origin;
+   if i >= 8 && i <= 15 {
+      // 2 SQUARE MOVEMENT
+      if squares[(i + 16) as usize] == Square::Empty {
+         let a_move = Move {
+            origin: i,
+            destination: i + 16,
+            promotion: None,
+         };
+         let new_board = cur_board.apply_move(a_move);
+         if !do_check_checking || !new_board.in_check(Color::Black) {
+            results.push((a_move, new_board))
+         }
+      }
+   }
+   if i >= 48 && i <= 55 {
+      // CAPTURE + PROMOTION
+      // NORMAL MOVEMENT + PROMOTION
+      if squares[(i + 8) as usize] == Square::Empty {
+         for promotion_target in PROMOTION_TARGETS.iter() {
+            let a_move = Move {
+               origin: i,
+               destination: i + 8,
+               promotion: Some(*promotion_target),
+            };
+            let new_board = cur_board.apply_move(a_move);
+            if !do_check_checking || !new_board.in_check(Color::Black) {
+               results.push((a_move, new_board))
+            }
+         }
+      }
+   } else {
+      // CAPTURE (+ EN-PASSANT)
+      {
+         let pot_squares = [i + 7, i + 9];
+         for pot_square in pot_squares
+            .iter()
+            .filter(|x| **x < 64)
+            .filter(|x| squares[**x as usize].color() == Some(Color::White) || cur_board.en_passant_square == Some(**x))
+            .filter(|x| abs_diff(i % 8, **x % 8) == 1)
+         {
+            let a_move = Move {
+               origin: i,
+               destination: *pot_square,
+               promotion: None,
+            };
+            let new_board = cur_board.apply_move(a_move);
+            if !do_check_checking || !new_board.in_check(Color::Black) {
+               results.push((a_move, new_board))
+            }
+         }
+      }
+      // NORMAL MOVEMENT
+      if squares[(i + 8) as usize] == Square::Empty {
+         let a_move = Move {
+            origin: i,
+            destination: i + 8,
+            promotion: None,
+         };
+         let new_board = cur_board.apply_move(a_move);
+         if !do_check_checking || !new_board.in_check(Color::Black) {
+            results.push((a_move, new_board))
+         }
+      }
+   }
+}
+
+fn bishop_movegen(
+   origin: u8,
+   squares: &[Square; 64],
+   color: Color,
    cur_board: &Board,
    results: &mut Vec<(Move, Board)>,
    do_check_checking: bool,
@@ -951,7 +890,7 @@ fn white_bishop_movegen(
       let mut x = 7;
       let mut last_col = i % 8;
       while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-         if squares[(i + x) as usize].is_white_piece() {
+         if squares[(i + x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -960,10 +899,10 @@ fn white_bishop_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[(i + x) as usize].is_black_piece() {
+         if squares[(i + x) as usize] != Square::Empty {
             break;
          }
          last_col = (i + x) % 8;
@@ -974,7 +913,7 @@ fn white_bishop_movegen(
       let mut x = 7;
       let mut last_col = i % 8;
       while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
+         if squares[i.wrapping_sub(x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -983,10 +922,10 @@ fn white_bishop_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+         if squares[i.wrapping_sub(x) as usize] != Square::Empty {
             break;
          }
          last_col = i.wrapping_sub(x) % 8;
@@ -997,7 +936,7 @@ fn white_bishop_movegen(
       let mut x = 9;
       let mut last_col = i % 8;
       while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-         if squares[(i + x) as usize].is_white_piece() {
+         if squares[(i + x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1006,10 +945,10 @@ fn white_bishop_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[(i + x) as usize].is_black_piece() {
+         if squares[(i + x) as usize] != Square::Empty {
             break;
          }
          last_col = (i + x) % 8;
@@ -1020,7 +959,7 @@ fn white_bishop_movegen(
       let mut x = 9;
       let mut last_col = i % 8;
       while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
+         if squares[i.wrapping_sub(x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1029,10 +968,10 @@ fn white_bishop_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+         if squares[i.wrapping_sub(x) as usize] != Square::Empty {
             break;
          }
          last_col = i.wrapping_sub(x) % 8;
@@ -1041,113 +980,10 @@ fn white_bishop_movegen(
    }
 }
 
-#[inline(always)]
-fn black_bishop_movegen(
+fn rook_movegen(
    origin: u8,
    squares: &[Square; 64],
-   cur_board: &Board,
-   results: &mut Vec<(Move, Board)>,
-   do_check_checking: bool,
-) {
-   let i = origin;
-   {
-      let mut x = 7;
-      let mut last_col = i % 8;
-      while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-         if squares[(i + x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i + x,
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[(i + x) as usize].is_white_piece() {
-            break;
-         }
-         last_col = (i + x) % 8;
-         x += 7;
-      }
-   }
-   {
-      let mut x = 7;
-      let mut last_col = i % 8;
-      while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i.wrapping_sub(x),
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
-            break;
-         }
-         last_col = i.wrapping_sub(x) % 8;
-         x += 7;
-      }
-   }
-   {
-      let mut x = 9;
-      let mut last_col = i % 8;
-      while i + x < 64 && abs_diff((i + x) % 8, last_col) == 1 {
-         if squares[(i + x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i + x,
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[(i + x) as usize].is_white_piece() {
-            break;
-         }
-         last_col = (i + x) % 8;
-         x += 9;
-      }
-   }
-   {
-      let mut x = 9;
-      let mut last_col = i % 8;
-      while i.wrapping_sub(x) < 64 && abs_diff(i.wrapping_sub(x) % 8, last_col) == 1 {
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i.wrapping_sub(x),
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
-            break;
-         }
-         last_col = i.wrapping_sub(x) % 8;
-         x += 9;
-      }
-   }
-}
-
-#[inline(always)]
-fn white_rook_movegen(
-   origin: u8,
-   squares: &[Square; 64],
+   color: Color,
    cur_board: &Board,
    results: &mut Vec<(Move, Board)>,
    do_check_checking: bool,
@@ -1157,7 +993,7 @@ fn white_rook_movegen(
    {
       let mut x = 8;
       while i.wrapping_sub(x) < 64 {
-         if squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
+         if squares[(i.wrapping_sub(x)) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1166,10 +1002,10 @@ fn white_rook_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
+         if squares[i.wrapping_sub(x) as usize] != Square::Empty {
             break;
          }
          x += 8
@@ -1178,7 +1014,7 @@ fn white_rook_movegen(
    {
       let mut x = 8;
       while i + x < 64 {
-         if squares[(i + x) as usize].is_white_piece() {
+         if squares[(i + x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1187,10 +1023,10 @@ fn white_rook_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[(i + x) as usize].is_black_piece() {
+         if squares[(i + x) as usize] != Square::Empty {
             break;
          }
          x += 8
@@ -1199,7 +1035,7 @@ fn white_rook_movegen(
    {
       let mut x = 1;
       while i + x < 64 && (i + x) % 8 > original_col {
-         if squares[(i + x) as usize].is_white_piece() {
+         if squares[(i + x) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1208,10 +1044,10 @@ fn white_rook_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[(i + x) as usize].is_black_piece() {
+         if squares[(i + x) as usize] != Square::Empty {
             break;
          }
          x += 1
@@ -1220,7 +1056,7 @@ fn white_rook_movegen(
    {
       let mut x = 1;
       while i.wrapping_sub(x) < 64 && i.wrapping_sub(x) % 8 < original_col {
-         if squares[(i.wrapping_sub(x)) as usize].is_white_piece() {
+         if squares[(i.wrapping_sub(x)) as usize].color() == Some(color) {
             break;
          }
          let a_move = Move {
@@ -1229,106 +1065,10 @@ fn white_rook_movegen(
             promotion: None,
          };
          let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.white_in_check() {
+         if !do_check_checking || !new_board.in_check(color) {
             results.push((a_move, new_board))
          }
-         if squares[i.wrapping_sub(x) as usize].is_black_piece() {
-            break;
-         }
-         x += 1
-      }
-   }
-}
-
-#[inline(always)]
-fn black_rook_movegen(
-   origin: u8,
-   squares: &[Square; 64],
-   cur_board: &Board,
-   results: &mut Vec<(Move, Board)>,
-   do_check_checking: bool,
-) {
-   let i = origin;
-   let original_col = i % 8;
-   {
-      let mut x = 8;
-      while i.wrapping_sub(x) < 64 {
-         if squares[(i.wrapping_sub(x)) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i.wrapping_sub(x),
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
-            break;
-         }
-         x += 8
-      }
-   }
-   {
-      let mut x = 8;
-      while i + x < 64 {
-         if squares[(i + x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i + x,
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[(i + x) as usize].is_white_piece() {
-            break;
-         }
-         x += 8
-      }
-   }
-   {
-      let mut x = 1;
-      while i + x < 64 && (i + x) % 8 > original_col {
-         if squares[(i + x) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i + x,
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[(i + x) as usize].is_white_piece() {
-            break;
-         }
-         x += 1
-      }
-   }
-   {
-      let mut x = 1;
-      while i.wrapping_sub(x) < 64 && i.wrapping_sub(x) % 8 < original_col {
-         if squares[(i.wrapping_sub(x)) as usize].is_black_piece() {
-            break;
-         }
-         let a_move = Move {
-            origin: i,
-            destination: i.wrapping_sub(x),
-            promotion: None,
-         };
-         let new_board = cur_board.apply_move(a_move);
-         if !do_check_checking || !new_board.black_in_check() {
-            results.push((a_move, new_board))
-         }
-         if squares[i.wrapping_sub(x) as usize].is_white_piece() {
+         if squares[i.wrapping_sub(x) as usize] != Square::Empty {
             break;
          }
          x += 1
@@ -1451,21 +1191,25 @@ mod tests {
    #[test]
    fn is_in_check_works() {
       let mut a = Board::from_moves("e2e4").unwrap();
-      assert_eq!(a.white_in_check(), false);
-      assert_eq!(a.black_in_check(), false);
+      assert_eq!(a.in_check(Color::White), false);
+      assert_eq!(a.in_check(Color::Black), false);
       a = Board::from_moves("e2e4 e4e5 d1h5 a7a6 h5f7").unwrap();
-      assert_eq!(a.white_in_check(), false);
-      assert_eq!(a.black_in_check(), true);
+      assert_eq!(a.in_check(Color::White), false);
+      assert_eq!(a.in_check(Color::Black), true);
       a = Board::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2").unwrap();
-      assert_eq!(a.white_in_check(), true);
-      assert_eq!(a.black_in_check(), false);
+      assert_eq!(a.in_check(Color::White), true);
+      assert_eq!(a.in_check(Color::Black), false);
       a = Board::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2 b1d2 f8b4").unwrap();
-      assert_eq!(a.white_in_check(), false);
-      assert_eq!(a.black_in_check(), false);
+      assert_eq!(a.in_check(Color::White), false);
+      assert_eq!(a.in_check(Color::Black), false);
       a = Board::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2 b1d2 f8b4 d2e4")
          .unwrap();
-      a.print_board();
-      assert_eq!(a.white_in_check(), true);
-      assert_eq!(a.black_in_check(), false);
+      assert_eq!(a.in_check(Color::White), true);
+      assert_eq!(a.in_check(Color::Black), false);
+   }
+
+   #[test]
+   fn square_small() {
+      assert_eq!(std::mem::size_of::<Square>(), 1)
    }
 }
