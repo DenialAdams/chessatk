@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PROMOTION_TARGETS: [PromotionTarget; 4] = [
    PromotionTarget::Knight,
    PromotionTarget::Bishop,
@@ -27,7 +27,7 @@ pub enum Square {
 }
 
 impl Square {
-   pub fn is_white_piece(&self) -> bool {
+   pub fn is_white_piece(self) -> bool {
       match self {
          Square::Empty
          | Square::BlackPawn
@@ -45,7 +45,7 @@ impl Square {
       }
    }
 
-   pub fn is_black_piece(&self) -> bool {
+   pub fn is_black_piece(self) -> bool {
       match self {
          Square::Empty
          | Square::WhitePawn
@@ -188,7 +188,7 @@ fn algebraic_to_index(algebraic: &str) -> Result<u8, String> {
       b'f' => 5,
       b'g' => 6,
       b'h' => 7,
-      file @ _ => return Err(format!("{} is not a valid algebraic file, expected a..=h", file)),
+      file => return Err(format!("{} is not a valid algebraic file, expected a..=h", file)),
    };
    let row = match algebraic.as_bytes()[1] {
       b'1' => 7,
@@ -199,7 +199,7 @@ fn algebraic_to_index(algebraic: &str) -> Result<u8, String> {
       b'6' => 2,
       b'7' => 1,
       b'8' => 0,
-      rank @ _ => return Err(format!("{} is not a valid algebraic rank, expected 1..=8", rank)),
+      rank => return Err(format!("{} is not a valid algebraic rank, expected 1..=8", rank)),
    };
    Ok((row * 8) + col)
 }
@@ -251,7 +251,7 @@ impl Board {
       };
 
       // Piece movement
-      let mut new_squares = self.squares.clone();
+      let mut new_squares = self.squares;
       {
          if let Some(promotion_target) = a_move.promotion {
             // Handle promotion
@@ -360,12 +360,12 @@ impl Board {
 
       Board {
          squares: new_squares,
-         white_kingside_castle: white_kingside_castle,
-         white_queenside_castle: white_queenside_castle,
-         black_kingside_castle: black_kingside_castle,
-         black_queenside_castle: black_queenside_castle,
+         white_kingside_castle,
+         white_queenside_castle,
+         black_kingside_castle,
+         black_queenside_castle,
          white_to_move: !self.white_to_move,
-         en_passant_square: en_passant_square,
+         en_passant_square,
          halfmove_clock: new_halfmove_clock,
          fullmove_number: new_fullmove_number,
       }
@@ -420,7 +420,7 @@ impl Board {
                   {
                      let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
                      for pot_square in pot_squares
-                        .into_iter()
+                        .iter()
                         .filter(|x| **x < 64)
                         .filter(|x| self.squares[**x as usize].is_black_piece() || self.en_passant_square == Some(**x))
                         .filter(|x| abs_diff(i % 8, **x % 8) == 1)
@@ -462,7 +462,7 @@ impl Board {
                   i.wrapping_sub(17),
                ];
                for pot_square in pot_squares
-                  .into_iter()
+                  .iter()
                   .filter(|x| **x < 64)
                   .filter(|x| !self.squares[**x as usize].is_white_piece())
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 2)
@@ -500,7 +500,7 @@ impl Board {
                   i.wrapping_sub(9),
                ];
                for pot_square in pot_squares
-                  .into_iter()
+                  .iter()
                   .filter(|x| **x < 64)
                   .filter(|x| !self.squares[**x as usize].is_white_piece())
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 1)
@@ -567,7 +567,7 @@ impl Board {
                   {
                      let pot_squares = [i + 7, i + 9];
                      for pot_square in pot_squares
-                        .into_iter()
+                        .iter()
                         .filter(|x| **x < 64)
                         .filter(|x| self.squares[**x as usize].is_white_piece() || self.en_passant_square == Some(**x))
                         .filter(|x| abs_diff(i % 8, **x % 8) == 1)
@@ -603,7 +603,7 @@ impl Board {
                   i.wrapping_sub(17),
                ];
                for pot_square in pot_squares
-                  .into_iter()
+                  .iter()
                   .filter(|x| **x < 64)
                   .filter(|x| !self.squares[**x as usize].is_black_piece())
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 2)
@@ -638,7 +638,7 @@ impl Board {
                   i.wrapping_sub(9),
                ];
                for pot_square in pot_squares
-                  .into_iter()
+                  .iter()
                   .filter(|x| **x < 64)
                   .filter(|x| !self.squares[**x as usize].is_black_piece())
                   .filter(|x| abs_diff(i % 8, **x % 8) <= 1)
@@ -672,8 +672,7 @@ impl Board {
          .squares
          .iter()
          .enumerate()
-         .filter(|(_, x)| **x == Square::WhiteKing)
-         .next()
+         .find(|(_, x)| **x == Square::WhiteKing)
          .unwrap()
          .0 as u8;
       let moves = self.gen_black_moves(false);
@@ -690,8 +689,7 @@ impl Board {
          .squares
          .iter()
          .enumerate()
-         .filter(|(_, x)| **x == Square::BlackKing)
-         .next()
+         .find(|(_, x)| **x == Square::BlackKing)
          .unwrap()
          .0 as u8;
       let moves = self.gen_white_moves(false);
@@ -876,10 +874,12 @@ impl Board {
                   }
                   bqc = true;
                }
-               _ => return Err(format!(
+               _ => {
+                  return Err(format!(
                   "malformed FEN; found byte {} (ASCII: {}) when parsing castling rights. Expected one of ASCII KQkq",
                   ascii_char, *ascii_char as char
-               )),
+               ));
+               }
             }
          }
       }
@@ -893,7 +893,7 @@ impl Board {
       }
       let en_passant_square = match en_passant_square_section {
          "-" => None,
-         algebraic @ _ => match algebraic_to_index(algebraic) {
+         algebraic => match algebraic_to_index(algebraic) {
             Ok(index) => Some(index),
             Err(e) => {
                return Err(format!(
@@ -925,15 +925,15 @@ impl Board {
       };
 
       Ok(Board {
-         squares: squares,
+         squares,
          white_kingside_castle: wkc,
          white_queenside_castle: wqc,
          black_kingside_castle: bkc,
          black_queenside_castle: bqc,
-         white_to_move: white_to_move,
-         en_passant_square: en_passant_square,
-         halfmove_clock: halfmove_clock,
-         fullmove_number: fullmove_number,
+         white_to_move,
+         en_passant_square,
+         halfmove_clock,
+         fullmove_number,
       })
    }
 }

@@ -11,7 +11,7 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
             board = Board::from_moves(&moves).unwrap();
          }
          InterfaceMessage::Go(depth) => {
-            let (_eval, best_move) = search(depth, board.clone());
+            let (_eval, best_move) = search(depth, board);
             sender.send(EngineMessage::BestMove(best_move.unwrap())).unwrap();
          }
       }
@@ -63,6 +63,6 @@ fn evaluate(board: Board) -> i64 {
    if board.white_to_move {
       eval
    } else {
-      -1 * eval
+      !eval
    }
 }

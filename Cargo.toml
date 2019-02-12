@@ -5,9 +5,9 @@ version = "0.1.0"
 authors = ["Richard McCormack <brick@brick.codes>"]
 
 [dependencies]
-hyper = "0.11"
-rand = "0.4"
-reqwest = "0.8"
+hyper = "0.12"
+rand = "0.6"
+reqwest = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 structopt = "0.2"
