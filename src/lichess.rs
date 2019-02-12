@@ -109,14 +109,18 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
       }
       Err(env::VarError::NotUnicode(_)) => {
          // TODO WARN
-         out_handle.write_all(b"WARN: Lichess API token environment variable found, but with invalid unicode. Ignoring.\n").unwrap();
+         out_handle
+            .write_all(b"WARN: Lichess API token environment variable found, but with invalid unicode. Ignoring.\n")
+            .unwrap();
          None
       }
    };
 
    let api_token = {
       if let Some(token) = env_api_token {
-         out_handle.write_all(b"Found lichess api token in environment, using that and proceeding.\n").unwrap();
+         out_handle
+            .write_all(b"Found lichess api token in environment, using that and proceeding.\n")
+            .unwrap();
          token
       } else {
          let api_token: Result<String, io::Error> = try {
@@ -148,7 +152,9 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
    let user_id = user.id;
    let username = user.username;
    if user.title == Some("BOT".into()) {
-      out_handle.write_all(b"Lichess user is a bot account, proceeding\n").unwrap();
+      out_handle
+         .write_all(b"Lichess user is a bot account, proceeding\n")
+         .unwrap();
    } else {
       out_handle.write_all(b"Attempting to upgrade account to bot\n").unwrap();
       let bot_upgrade_res = client
@@ -157,9 +163,13 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
          .send()
          .unwrap();
       if bot_upgrade_res.status() == StatusCode::OK {
-         out_handle.write_all(b"Upgrade to bot account OK, proceeding\n").unwrap();
+         out_handle
+            .write_all(b"Upgrade to bot account OK, proceeding\n")
+            .unwrap();
       } else {
-         err_handle.write_all(b"Failed to upgrade account to bot, and account is not already a bot. Can't proceed\n").unwrap();
+         err_handle
+            .write_all(b"Failed to upgrade account to bot, and account is not already a bot. Can't proceed\n")
+            .unwrap();
       }
    }
 
@@ -188,7 +198,9 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                      .send()
                      .unwrap();
                   if challenge_accept_res.status() != StatusCode::OK {
-                     out_handle.write_all(b"Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.\n").unwrap();
+                     out_handle
+                        .write_all(b"Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.\n")
+                        .unwrap();
                   }
                }
             }
@@ -238,7 +250,8 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                                  &mut err_handle,
                                  "tried to make move {} and it was rejected",
                                  engine_move
-                              ).unwrap();
+                              )
+                              .unwrap();
                               err_handle.flush().unwrap();
                               panic!();
                            }
@@ -266,7 +279,8 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                                  &mut err_handle,
                                  "tried to make move {} and it was rejected",
                                  engine_move
-                              ).unwrap();
+                              )
+                              .unwrap();
                               err_handle.flush().unwrap();
                               panic!();
                            }

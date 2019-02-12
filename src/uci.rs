@@ -20,47 +20,47 @@ pub(crate) fn main_loop(_sender: mpsc::Sender<InterfaceMessage>, _receiver: mpsc
       if line_buf.is_empty() {
          break;
       }
-let res: Result<(), io::Error> = try {
-   let args: Vec<&str> = line_buf.split_whitespace().collect();
-   if args.is_empty() {
-      continue;
-   }
+      let res: Result<(), io::Error> = try {
+         let args: Vec<&str> = line_buf.split_whitespace().collect();
+         if args.is_empty() {
+            continue;
+         }
 
-   match args[0] {
-      "uci" => {
-         out_handle.write_all(b"id name chessatk\n")?;
-         out_handle.write_all(b"id author Richard McCormack\n")?;
-         out_handle.write_all(b"uciok\n")?;
-      }
-      "isready" => {
-         out_handle.write_all(b"readyok\n")?;
-      }
-      "position" => {
-         match args[1] {
-            "fen" => {}
-            "startpos" => {}
+         match args[0] {
+            "uci" => {
+               out_handle.write_all(b"id name chessatk\n")?;
+               out_handle.write_all(b"id author Richard McCormack\n")?;
+               out_handle.write_all(b"uciok\n")?;
+            }
+            "isready" => {
+               out_handle.write_all(b"readyok\n")?;
+            }
+            "position" => {
+               match args[1] {
+                  "fen" => {}
+                  "startpos" => {}
+                  _ => {
+                     // TODO ERROR
+                     eprintln!("Expected 'fen' or 'startpos' following 'postion'");
+                     break;
+                  }
+               }
+               /*
+               if let Some(value) = args.get(2) {
+                     if *value == "moves" {
+
+                     } else {
+                        eprintln!("Expected 'moves' following a position")
+                     }
+               } */
+            }
             _ => {
                // TODO ERROR
-               eprintln!("Expected 'fen' or 'startpos' following 'postion'");
+               eprintln!("Unexpected input {}", line_buf);
                break;
             }
          }
-         /*
-         if let Some(value) = args.get(2) {
-               if *value == "moves" {
-
-               } else {
-                  eprintln!("Expected 'moves' following a position")
-               }
-         } */
-      }
-      _ => {
-         // TODO ERROR
-         eprintln!("Unexpected input {}", line_buf);
-         break;
-      }
-   }
-};
+      };
       if let Err(e) = res {
          // TODO ERROR
          eprintln!("Encountered I/O error writing in UCI loop: {}", e);
