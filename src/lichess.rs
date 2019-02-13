@@ -41,6 +41,12 @@ struct ChallengeOuter {
 struct ChallengeInner {
    id: String,
    rated: bool,
+   variant: Variant
+}
+
+#[derive(Deserialize)]
+struct Variant {
+   key: String
 }
 
 #[derive(Deserialize)]
@@ -178,7 +184,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
          match event {
             Event::challenge(challenge_outer) => {
                let challenge_id = challenge_outer.challenge.id;
-               if !challenge_outer.challenge.rated {
+               if !challenge_outer.challenge.rated && challenge_outer.challenge.variant.key == "standard" {
                   let challenge_accept_res = client
                      .post(&format!("https://lichess.org/api/challenge/{}/accept", challenge_id))
                      .bearer_auth(&api_token)
