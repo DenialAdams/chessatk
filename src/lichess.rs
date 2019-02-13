@@ -97,6 +97,7 @@ enum GameEvent {
    chatLine(ChatLine),
 }
 
+#[allow(clippy::cyclomatic_complexity)] //temporary, we need to replace with async
 pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let env_api_token = match env::var("LICHESS_API_TOKEN") {
       Ok(token) => Some(token),
@@ -227,7 +228,20 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                         }
                      }
                      GameEvent::chatLine(chat_line) => {
-                        if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
+                        if chat_line.text == "!eval" {
+                           sender.send(InterfaceMessage::QueryEval).unwrap();
+                           let eval = match receiver.recv().unwrap() {
+                              EngineMessage::CurrentEval(e) => e,
+                              _ => panic!("expected current eval from the engine!"),
+                           };
+                           let body = [("room", &chat_line.room), ("text", &eval.to_string())];
+                           let _chat_res = client
+                              .post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
+                              .bearer_auth(&api_token)
+                              .form(&body)
+                              .send()
+                              .unwrap();
+                        } else if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
                            let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
                            let body = [("room", "player"), ("text", chat_saying)];
                            let _chat_res = client
@@ -255,7 +269,10 @@ fn think_and_move(
 ) {
    sender.send(InterfaceMessage::Go(5)).unwrap();
    trace!("Our move! Thinking...");
-   let EngineMessage::BestMove(engine_move_opt) = receiver.recv().unwrap();
+   let engine_move_opt = match receiver.recv().unwrap() {
+      EngineMessage::BestMove(e) => e,
+      _ => panic!("expected a move in response from the engine!"),
+   };
    if let Some(e_move) = engine_move_opt {
       trace!("Decided on {}", e_move);
       let make_move_res = client

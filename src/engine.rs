@@ -15,6 +15,9 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
             let (_eval, best_move) = search(depth, board);
             sender.send(EngineMessage::BestMove(best_move)).unwrap();
          }
+         InterfaceMessage::QueryEval => {
+            sender.send(EngineMessage::CurrentEval(evaluate(&board)));
+         }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
       //board = board.apply_move(best_move.unwrap());
@@ -45,7 +48,7 @@ fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
 
 fn nega_max(depth: u64, board: Board, mut alpha: f64, beta: f64, nodes_expanded: &mut u64, nodes_generated: &mut u64) -> f64 {
    if depth == 0 {
-      return evaluate(board);
+      return evaluate(&board);
    }
    let mut max: f64 = std::f64::NEG_INFINITY;
    let moves = board.gen_moves(true);
@@ -84,15 +87,31 @@ fn mat_val(piece: Piece) -> f64 {
    }
 }
 
-fn evaluate(board: Board) -> f64 {
+fn evaluate(board: &Board) -> f64 {
    use crate::board::Color;
 
+   // material
    let white_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::White)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
    let black_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::Black)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
-   let eval = white_mat_score as f64 - black_mat_score as f64;
+   let mat_score = white_mat_score as f64 - black_mat_score as f64;
+
+   // distance bonus
+   let white_dist_score = board.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(Color::White)).fold(0.0f64, |acc, (i, _)| {
+      let row = i / 8;
+      let dist = 7 - row;
+      acc + dist as f64
+   });
+   let black_dist_score = board.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(Color::Black)).fold(0.0f64, |acc, (i, _)| {
+      let row = i / 8;
+      acc + row as f64
+   });
+   let dist_score = white_dist_score - black_dist_score;
+
+   let final_score = mat_score * 0.9 + dist_score * 0.1;
+
    if board.side_to_move == Color::White {
-      eval
+      final_score
    } else {
-      -eval
+      -final_score
    }
 }
