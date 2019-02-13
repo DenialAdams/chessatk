@@ -3,6 +3,8 @@ use crate::messages::{EngineMessage, InterfaceMessage};
 use std;
 use std::sync::mpsc;
 use log::trace;
+use rayon::prelude::*;
+use std::time::Instant;
 
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut board = Board::from_start();
@@ -16,7 +18,8 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
             sender.send(EngineMessage::BestMove(best_move)).unwrap();
          }
          InterfaceMessage::QueryEval => {
-            sender.send(EngineMessage::CurrentEval(evaluate(&board)));
+            // TODO: this seems wrong. we evaluated this at a much greater depth, so we should save that.
+            sender.send(EngineMessage::CurrentEval(evaluate(&board))).unwrap();
          }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
@@ -26,6 +29,7 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
 }
 
 fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
+   let search_time_start = Instant::now();
    let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
    let moves = board.gen_moves(true);
@@ -35,14 +39,22 @@ fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
       // stalemate
       max = 0.0;
    }
-   for (a_move, new_board) in moves {
-      let score: f64 = -nega_max(depth - 1, new_board, std::f64::NEG_INFINITY, std::f64::INFINITY, &mut nodes_expanded, &mut nodes_generated);
+   let scores: Vec<_> = moves.into_par_iter().map(|(a_move, new_board)| {
+      let mut ne = 0;
+      let mut ng = 0;
+      let score: f64 = -nega_max(depth - 1, new_board, std::f64::NEG_INFINITY, std::f64::INFINITY, &mut ne, &mut ng);
+      (a_move, score, ne, ng)
+   }).collect();
+   for (a_move, score, ne, ng) in scores {
+      nodes_expanded += ne;
+      nodes_generated += ng;
       if score >= max {
          max = score;
          best_move = Some(a_move);
       }
    }
    trace!("nodes generated: {} nodes expanded: {}", nodes_generated, nodes_expanded);
+   trace!("search @ depth {} took {}", depth, search_time_start.elapsed().as_float_secs());
    (max, best_move)
 }
 

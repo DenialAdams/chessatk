@@ -1,5 +1,6 @@
 #![feature(try_blocks)]
 #![feature(try_from)]
+#![feature(duration_float)]
 
 mod board;
 mod engine;
@@ -29,6 +30,8 @@ fn main() {
    thread::spawn(move || {
       engine::start(ite_rx, eti_tx);
    });
+
+   ite_tx.send(messages::InterfaceMessage::Go(6)).unwrap();
 
    if opt.lichess {
       lichess::main_loop(ite_tx, eti_rx)

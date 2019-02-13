@@ -267,7 +267,7 @@ fn think_and_move(
    sender: &mpsc::Sender<InterfaceMessage>,
    receiver: &mpsc::Receiver<EngineMessage>,
 ) {
-   sender.send(InterfaceMessage::Go(5)).unwrap();
+   sender.send(InterfaceMessage::Go(6)).unwrap();
    trace!("Our move! Thinking...");
    let engine_move_opt = match receiver.recv().unwrap() {
       EngineMessage::BestMove(e) => e,
