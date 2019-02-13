@@ -1,17 +1,25 @@
 use crate::board::{Board, Move};
 use crate::messages::{EngineMessage, InterfaceMessage};
-use std;
-use std::sync::mpsc;
 use log::trace;
 use rayon::prelude::*;
+use std;
+use std::sync::mpsc;
 use std::time::Instant;
 
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
-   let mut board = Board::from_start();
+   let mut original_board = Board::from_start();
+   let mut board = original_board;
    loop {
       match receiver.recv().unwrap() {
-         InterfaceMessage::BoardState(moves) => {
-            board = Board::from_moves(&moves).unwrap();
+         InterfaceMessage::NewGameFEN(start_pos) => {
+            original_board = Board::from_fen(&start_pos).unwrap();
+            board = original_board;
+         }
+         InterfaceMessage::ApplyMovesFromStart(moves) => {
+            board = original_board;
+            for a_move in moves.split_whitespace() {
+               board = board.apply_move(a_move.parse().unwrap());
+            }
          }
          InterfaceMessage::Go(depth) => {
             let (_eval, best_move) = search(depth, board);
@@ -39,12 +47,22 @@ fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
       // stalemate
       max = 0.0;
    }
-   let scores: Vec<_> = moves.into_par_iter().map(|(a_move, new_board)| {
-      let mut ne = 0;
-      let mut ng = 0;
-      let score: f64 = -nega_max(depth - 1, new_board, std::f64::NEG_INFINITY, std::f64::INFINITY, &mut ne, &mut ng);
-      (a_move, score, ne, ng)
-   }).collect();
+   let scores: Vec<_> = moves
+      .into_par_iter()
+      .map(|(a_move, new_board)| {
+         let mut ne = 0;
+         let mut ng = 0;
+         let score: f64 = -nega_max(
+            depth - 1,
+            new_board,
+            std::f64::NEG_INFINITY,
+            std::f64::INFINITY,
+            &mut ne,
+            &mut ng,
+         );
+         (a_move, score, ne, ng)
+      })
+      .collect();
    for (a_move, score, ne, ng) in scores {
       nodes_expanded += ne;
       nodes_generated += ng;
@@ -53,12 +71,27 @@ fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
          best_move = Some(a_move);
       }
    }
-   trace!("nodes generated: {} nodes expanded: {}", nodes_generated, nodes_expanded);
-   trace!("search @ depth {} took {}", depth, search_time_start.elapsed().as_float_secs());
+   trace!(
+      "nodes generated: {} nodes expanded: {}",
+      nodes_generated,
+      nodes_expanded
+   );
+   trace!(
+      "search @ depth {} took {}",
+      depth,
+      search_time_start.elapsed().as_float_secs()
+   );
    (max, best_move)
 }
 
-fn nega_max(depth: u64, board: Board, mut alpha: f64, beta: f64, nodes_expanded: &mut u64, nodes_generated: &mut u64) -> f64 {
+fn nega_max(
+   depth: u64,
+   board: Board,
+   mut alpha: f64,
+   beta: f64,
+   nodes_expanded: &mut u64,
+   nodes_generated: &mut u64,
+) -> f64 {
    if depth == 0 {
       return evaluate(&board);
    }
@@ -103,20 +136,38 @@ fn evaluate(board: &Board) -> f64 {
    use crate::board::Color;
 
    // material
-   let white_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::White)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
-   let black_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::Black)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
+   let white_mat_score = board
+      .squares
+      .iter()
+      .filter(|x| x.color() == Some(Color::White))
+      .fold(0.0, |acc, x| acc + mat_val(x.piece()));
+   let black_mat_score = board
+      .squares
+      .iter()
+      .filter(|x| x.color() == Some(Color::Black))
+      .fold(0.0, |acc, x| acc + mat_val(x.piece()));
    let mat_score = white_mat_score as f64 - black_mat_score as f64;
 
    // distance bonus
-   let white_dist_score = board.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(Color::White)).fold(0.0f64, |acc, (i, _)| {
-      let row = i / 8;
-      let dist = 7 - row;
-      acc + dist as f64
-   });
-   let black_dist_score = board.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(Color::Black)).fold(0.0f64, |acc, (i, _)| {
-      let row = i / 8;
-      acc + row as f64
-   });
+   let white_dist_score = board
+      .squares
+      .iter()
+      .enumerate()
+      .filter(|(_, x)| x.color() == Some(Color::White))
+      .fold(0.0f64, |acc, (i, _)| {
+         let row = i / 8;
+         let dist = 7 - row;
+         acc + dist as f64
+      });
+   let black_dist_score = board
+      .squares
+      .iter()
+      .enumerate()
+      .filter(|(_, x)| x.color() == Some(Color::Black))
+      .fold(0.0f64, |acc, (i, _)| {
+         let row = i / 8;
+         acc + row as f64
+      });
    let dist_score = white_dist_score - black_dist_score;
 
    let final_score = mat_score * 0.9 + dist_score * 0.1;

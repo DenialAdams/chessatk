@@ -4,13 +4,14 @@ use crate::board::Move;
 
 // Interface to Engine
 pub(crate) enum InterfaceMessage {
-   BoardState(String), // List of moves from beginning in UCI format
-   Go(u64),            // Calculate until depth and respond with the best move
-   QueryEval,
+   Go(u64),                     // Calculate until depth and respond with the best move
+   QueryEval,                   // Query the evaluation of the current game state
+   NewGameFEN(String),          // Start a new game (clear seen positions) from FEN
+   ApplyMovesFromStart(String), // From the starting board (NewGameFEN), apply these UCI moves
 }
 
 // Engine to Interface
 pub(crate) enum EngineMessage {
    BestMove(Option<Move>),
-   CurrentEval(f64)
+   CurrentEval(f64),
 }

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PROMOTION_TARGETS: [PromotionTarget; 4] = [
    PromotionTarget::Knight,
    PromotionTarget::Bishop,
@@ -29,7 +29,7 @@ pub enum Square {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Color {
    Black,
-   White
+   White,
 }
 
 impl std::ops::Not for Color {
@@ -50,7 +50,7 @@ pub enum Piece {
    Bishop,
    Rook,
    Queen,
-   King
+   King,
 }
 
 impl Square {
@@ -69,8 +69,18 @@ impl Square {
    pub fn color(self) -> Option<Color> {
       match self {
          Square::Empty => None,
-         Square::WhitePawn | Square::WhiteKnight | Square::WhiteBishop | Square::WhiteRook | Square::WhiteQueen | Square::WhiteKing => Some(Color::White),
-         Square::BlackPawn | Square::BlackKnight | Square::BlackBishop | Square::BlackRook | Square::BlackQueen | Square::BlackKing => Some(Color::Black)
+         Square::WhitePawn
+         | Square::WhiteKnight
+         | Square::WhiteBishop
+         | Square::WhiteRook
+         | Square::WhiteQueen
+         | Square::WhiteKing => Some(Color::White),
+         Square::BlackPawn
+         | Square::BlackKnight
+         | Square::BlackBishop
+         | Square::BlackRook
+         | Square::BlackQueen
+         | Square::BlackKing => Some(Color::Black),
       }
    }
 }
@@ -116,8 +126,9 @@ pub struct Board {
    pub white_queenside_castle: bool,
    pub black_kingside_castle: bool,
    pub black_queenside_castle: bool,
-   pub side_to_move: Color,
    pub en_passant_square: Option<u8>,
+   // ----^ need to be hashed for three move repetition checking
+   pub side_to_move: Color,
    pub halfmove_clock: u64,
    pub fullmove_number: u64,
 }
@@ -392,19 +403,22 @@ impl Board {
 
    fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<(Move, Board)> {
       let mut results = Vec::new();
-      for (i, square) in self.squares.iter().enumerate().filter(|(_, x)| x.color() == Some(color)) {
+      for (i, square) in self
+         .squares
+         .iter()
+         .enumerate()
+         .filter(|(_, x)| x.color() == Some(color))
+      {
          let i = i as u8;
          match square.piece() {
-            Piece::Pawn => {
-               match color {
-                  Color::White => {
-                     white_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-                  }
-                  Color::Black => {
-                     black_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
-                  }
+            Piece::Pawn => match color {
+               Color::White => {
+                  white_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
                }
-            }
+               Color::Black => {
+                  black_pawn_movegen(i, &self.squares, &self, &mut results, do_check_checking);
+               }
+            },
             Piece::Knight => {
                let pot_squares = [
                   i + 6,
@@ -799,7 +813,9 @@ fn white_pawn_movegen(
          for pot_square in pot_squares
             .iter()
             .filter(|x| **x < 64)
-            .filter(|x| cur_board.squares[**x as usize].color() == Some(Color::Black) || cur_board.en_passant_square == Some(**x))
+            .filter(|x| {
+               cur_board.squares[**x as usize].color() == Some(Color::Black) || cur_board.en_passant_square == Some(**x)
+            })
             .filter(|x| abs_diff(i % 8, **x % 8) == 1)
          {
             let a_move = Move {
@@ -1256,7 +1272,8 @@ mod tests {
 
    #[test]
    fn pawn_seventh_check_bug() {
-      let a = Board::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2").unwrap();
+      let a =
+         Board::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2").unwrap();
       a.print_board();
       assert_eq!(a.in_check(Color::White), true);
    }

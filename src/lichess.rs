@@ -68,11 +68,13 @@ struct Player {
 }
 
 #[derive(Deserialize)]
+#[allow(non_camel_case_types)]
 struct GameFull {
    id: String,
    rated: bool,
    white: Player,
    black: Player,
+   initialFen: String,
    state: GameState,
 }
 
@@ -208,8 +210,14 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                         if full_game.white.id == user_id {
                            we_are_white = true;
                         }
+                        let initial_fen = if full_game.initialFen == "startpos" {
+                           String::from(crate::board::START_FEN)
+                        } else {
+                           full_game.initialFen
+                        };
+                        sender.send(InterfaceMessage::NewGameFEN(initial_fen)).unwrap();
                         sender
-                           .send(InterfaceMessage::BoardState(full_game.state.moves.clone()))
+                           .send(InterfaceMessage::ApplyMovesFromStart(full_game.state.moves.clone()))
                            .unwrap();
                         if (full_game.state.moves.split_whitespace().count() % 2 == 0 && we_are_white)
                            || (full_game.state.moves.split_whitespace().count() % 2 != 0 && !we_are_white)
@@ -219,7 +227,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                      }
                      GameEvent::gameState(game_state) => {
                         sender
-                           .send(InterfaceMessage::BoardState(game_state.moves.clone()))
+                           .send(InterfaceMessage::ApplyMovesFromStart(game_state.moves.clone()))
                            .unwrap();
                         if (game_state.moves.split_whitespace().count() % 2 == 0 && we_are_white)
                            || (game_state.moves.split_whitespace().count() % 2 != 0 && !we_are_white)
@@ -241,7 +249,10 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                               .form(&body)
                               .send()
                               .unwrap();
-                        } else if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
+                        } else if chat_line.room == "player"
+                           && chat_line.username != username
+                           && chat_line.username != "lichess"
+                        {
                            let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
                            let body = [("room", "player"), ("text", chat_saying)];
                            let _chat_res = client
@@ -276,10 +287,7 @@ fn think_and_move(
    if let Some(e_move) = engine_move_opt {
       trace!("Decided on {}", e_move);
       let make_move_res = client
-         .post(&format!(
-            "https://lichess.org/api/bot/game/{}/move/{}",
-            game_id, e_move
-         ))
+         .post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, e_move))
          .bearer_auth(&api_token)
          .send()
          .unwrap();
