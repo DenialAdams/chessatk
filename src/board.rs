@@ -1255,8 +1255,8 @@ mod tests {
    }
 
    #[test]
-   fn mystery_check_bug() {
-      let mut a = Board::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2").unwrap();
+   fn pawn_seventh_check_bug() {
+      let a = Board::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2").unwrap();
       a.print_board();
       assert_eq!(a.in_check(Color::White), true);
    }

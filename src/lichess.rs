@@ -81,7 +81,7 @@ struct GameState {
    moves: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ChatLine {
    username: String,
    text: String,
@@ -227,7 +227,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                         }
                      }
                      GameEvent::chatLine(chat_line) => {
-                        if chat_line.room == "player" && chat_line.username != username {
+                        if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
                            let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
                            let body = [("room", "player"), ("text", chat_saying)];
                            let _chat_res = client
