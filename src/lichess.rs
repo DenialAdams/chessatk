@@ -68,7 +68,7 @@ struct Player {
 }
 
 #[derive(Deserialize)]
-#[allow(non_camel_case_types)]
+#[allow(non_snake_case)]
 struct GameFull {
    id: String,
    rated: bool,
