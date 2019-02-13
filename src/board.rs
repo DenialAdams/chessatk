@@ -245,6 +245,7 @@ impl Board {
       Board::from_fen(START_FEN).unwrap()
    }
 
+   #[cfg(test)]
    pub fn from_moves(moves: &str) -> Result<Board, String> {
       let mut board = Board::from_start();
       for a_str_move in moves.split_whitespace() {
