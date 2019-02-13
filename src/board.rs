@@ -342,12 +342,16 @@ impl Board {
             }
             Square::WhitePawn => {
                if a_move.origin - a_move.destination == 16 {
-                  en_passant_square = Some(a_move.destination + 8)
+                  en_passant_square = Some(a_move.destination + 8);
+               } else if Some(a_move.destination) == self.en_passant_square {
+                  new_squares[(a_move.destination + 8) as usize] = Square::Empty;
                }
             }
             Square::BlackPawn => {
                if a_move.destination - a_move.origin == 16 {
-                  en_passant_square = Some(a_move.destination - 8)
+                  en_passant_square = Some(a_move.destination - 8);
+               } else if Some(a_move.destination) == self.en_passant_square {
+                  new_squares[(a_move.destination - 8) as usize] = Square::Empty;
                }
             }
             _ => {
@@ -475,7 +479,7 @@ impl Board {
       results
    }
 
-   fn in_check(&self, color: Color) -> bool {
+   pub fn in_check(&self, color: Color) -> bool {
       let king_pos = self
          .squares
          .iter()
@@ -739,7 +743,7 @@ fn white_pawn_movegen(
    let i = origin;
    if i >= 48 && i <= 55 {
       // 2 SQUARE MOVEMENT
-      if squares[(i - 16) as usize] == Square::Empty {
+      if squares[(i - 16) as usize] == Square::Empty && squares[(i - 8) as usize] == Square::Empty {
          let a_move = Move {
             origin: i,
             destination: i - 16,
@@ -753,6 +757,27 @@ fn white_pawn_movegen(
    }
    if i >= 8 && i <= 15 {
       // CAPTURE + PROMOTION
+      {
+         let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
+         for pot_square in pot_squares
+            .iter()
+            .filter(|x| **x < 64)
+            .filter(|x| cur_board.squares[**x as usize].color() == Some(Color::Black))
+            .filter(|x| abs_diff(i % 8, **x % 8) == 1)
+         {
+            for promotion_target in PROMOTION_TARGETS.iter() {
+               let a_move = Move {
+                  origin: i,
+                  destination: *pot_square,
+                  promotion: Some(*promotion_target),
+               };
+               let new_board = cur_board.apply_move(a_move);
+               if !do_check_checking || !new_board.in_check(Color::White) {
+                  results.push((a_move, new_board))
+               }
+            }
+         }
+      }
       // NORMAL MOVEMENT + PROMOTION
       if squares[i.wrapping_sub(8) as usize] == Square::Empty {
          for promotion_target in PROMOTION_TARGETS.iter() {
@@ -813,7 +838,7 @@ fn black_pawn_movegen(
    let i = origin;
    if i >= 8 && i <= 15 {
       // 2 SQUARE MOVEMENT
-      if squares[(i + 16) as usize] == Square::Empty {
+      if squares[(i + 16) as usize] == Square::Empty && squares[(i + 8) as usize] == Square::Empty {
          let a_move = Move {
             origin: i,
             destination: i + 16,
@@ -827,6 +852,27 @@ fn black_pawn_movegen(
    }
    if i >= 48 && i <= 55 {
       // CAPTURE + PROMOTION
+      {
+         let pot_squares = [i + 7, i + 9];
+         for pot_square in pot_squares
+            .iter()
+            .filter(|x| **x < 64)
+            .filter(|x| squares[**x as usize].color() == Some(Color::White))
+            .filter(|x| abs_diff(i % 8, **x % 8) == 1)
+         {
+            for promotion_target in PROMOTION_TARGETS.iter() {
+               let a_move = Move {
+                  origin: i,
+                  destination: *pot_square,
+                  promotion: Some(*promotion_target),
+               };
+               let new_board = cur_board.apply_move(a_move);
+               if !do_check_checking || !new_board.in_check(Color::Black) {
+                  results.push((a_move, new_board))
+               }
+            }
+         }
+      }
       // NORMAL MOVEMENT + PROMOTION
       if squares[(i + 8) as usize] == Square::Empty {
          for promotion_target in PROMOTION_TARGETS.iter() {
@@ -1206,6 +1252,13 @@ mod tests {
          .unwrap();
       assert_eq!(a.in_check(Color::White), true);
       assert_eq!(a.in_check(Color::Black), false);
+   }
+
+   #[test]
+   fn mystery_check_bug() {
+      let mut a = Board::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2").unwrap();
+      a.print_board();
+      assert_eq!(a.in_check(Color::White), true);
    }
 
    #[test]

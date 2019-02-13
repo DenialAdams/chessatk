@@ -2,6 +2,7 @@ use crate::board::{Board, Move};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use std;
 use std::sync::mpsc;
+use log::trace;
 
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut board = Board::from_start();
@@ -12,7 +13,7 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
          }
          InterfaceMessage::Go(depth) => {
             let (_eval, best_move) = search(depth, board);
-            sender.send(EngineMessage::BestMove(best_move.unwrap())).unwrap();
+            sender.send(EngineMessage::BestMove(best_move)).unwrap();
          }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
@@ -21,52 +22,74 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
    }
 }
 
-fn search(depth: u64, board: Board) -> (i64, Option<Move>) {
-   let mut max: i64 = std::i64::MIN;
+fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
+   let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
    let moves = board.gen_moves(true);
-   if moves.is_empty() {
-      max = 0;
-   }
    let mut nodes_expanded = 1;
-   let mut nodes_generated = moves.len() as u64;
+   let mut nodes_generated = 1 + moves.len() as u64;
+   if moves.is_empty() && !board.in_check(board.side_to_move) {
+      // stalemate
+      max = 0.0;
+   }
    for (a_move, new_board) in moves {
-      let score: i64 = -nega_max(depth - 1, new_board, &mut nodes_expanded, &mut nodes_generated);
-      if score > max {
+      let score: f64 = -nega_max(depth - 1, new_board, std::f64::NEG_INFINITY, std::f64::INFINITY, &mut nodes_expanded, &mut nodes_generated);
+      if score >= max {
          max = score;
          best_move = Some(a_move);
       }
    }
-   println!("nodes generated: {} nodes expanded: {}", nodes_generated, nodes_expanded);
+   trace!("nodes generated: {} nodes expanded: {}", nodes_generated, nodes_expanded);
    (max, best_move)
 }
 
-fn nega_max(depth: u64, board: Board, nodes_expanded: &mut u64, nodes_generated: &mut u64) -> i64 {
+fn nega_max(depth: u64, board: Board, mut alpha: f64, beta: f64, nodes_expanded: &mut u64, nodes_generated: &mut u64) -> f64 {
    if depth == 0 {
       return evaluate(board);
    }
-   let mut max: i64 = std::i64::MIN;
+   let mut max: f64 = std::f64::NEG_INFINITY;
    let moves = board.gen_moves(true);
-   if moves.is_empty() {
-      max = 0;
-   }
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
+   if moves.is_empty() && !board.in_check(board.side_to_move) {
+      // stalemate
+      max = 0.0;
+   }
    for (_, new_board) in moves {
-      let score: i64 = -nega_max(depth - 1, new_board, nodes_expanded, nodes_generated);
+      let score: f64 = -nega_max(depth - 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
       if score > max {
          max = score;
+      }
+      if max > alpha {
+         alpha = max;
+      }
+      if alpha >= beta {
+         break;
       }
    }
    max
 }
 
-fn evaluate(board: Board) -> i64 {
+use crate::board::Piece;
+
+fn mat_val(piece: Piece) -> f64 {
+   match piece {
+      Piece::Empty => 0.0,
+      Piece::Pawn => 1.0,
+      Piece::Knight => 3.0,
+      Piece::Bishop => 3.0,
+      Piece::Rook => 5.0,
+      Piece::Queen => 10.0,
+      Piece::King => 0.0,
+   }
+}
+
+fn evaluate(board: Board) -> f64 {
    use crate::board::Color;
 
-   let num_white_squares = board.squares.iter().filter(|x| x.color() == Some(Color::White)).count();
-   let num_black_squares = board.squares.iter().filter(|x| x.color() == Some(Color::Black)).count();
-   let eval = num_white_squares as i64 - num_black_squares as i64;
+   let white_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::White)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
+   let black_mat_score = board.squares.iter().filter(|x| x.color() == Some(Color::Black)).fold(0.0, |acc, x| acc + mat_val(x.piece()));
+   let eval = white_mat_score as f64 - black_mat_score as f64;
    if board.side_to_move == Color::White {
       eval
    } else {

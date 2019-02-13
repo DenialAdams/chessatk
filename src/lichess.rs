@@ -253,20 +253,24 @@ fn think_and_move(
    sender: &mpsc::Sender<InterfaceMessage>,
    receiver: &mpsc::Receiver<EngineMessage>,
 ) {
-   sender.send(InterfaceMessage::Go(3)).unwrap();
+   sender.send(InterfaceMessage::Go(5)).unwrap();
    trace!("Our move! Thinking...");
-   let EngineMessage::BestMove(engine_move) = receiver.recv().unwrap();
-   trace!("Decided on {}", engine_move);
-   let make_move_res = client
-      .post(&format!(
-         "https://lichess.org/api/bot/game/{}/move/{}",
-         game_id, engine_move
-      ))
-      .bearer_auth(&api_token)
-      .send()
-      .unwrap();
-   if make_move_res.status() != StatusCode::OK {
-      error!("tried to make move {} and it was rejected", engine_move);
-      panic!();
+   let EngineMessage::BestMove(engine_move_opt) = receiver.recv().unwrap();
+   if let Some(e_move) = engine_move_opt {
+      trace!("Decided on {}", e_move);
+      let make_move_res = client
+         .post(&format!(
+            "https://lichess.org/api/bot/game/{}/move/{}",
+            game_id, e_move
+         ))
+         .bearer_auth(&api_token)
+         .send()
+         .unwrap();
+      if make_move_res.status() != StatusCode::OK {
+         error!("tried to make move {} and it was rejected", e_move);
+         panic!();
+      }
+   } else {
+      trace!("Drat, mated.")
    }
 }

@@ -10,5 +10,5 @@ pub(crate) enum InterfaceMessage {
 
 // Engine to Interface
 pub(crate) enum EngineMessage {
-   BestMove(Move),
+   BestMove(Option<Move>),
 }
