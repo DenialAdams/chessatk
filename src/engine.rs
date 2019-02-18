@@ -1,4 +1,4 @@
-use crate::board::{Board, Move};
+use crate::board::{Color, Move, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rayon::prelude::*;
@@ -7,27 +7,23 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
-   let mut original_board = Board::from_start();
-   let mut board = original_board;
+   let mut state = State::from_start();
+   let mut last_eval = 0.0f64;
    loop {
       match receiver.recv().unwrap() {
-         InterfaceMessage::NewGameFEN(start_pos) => {
-            original_board = Board::from_fen(&start_pos).unwrap();
-            board = original_board;
-         }
-         InterfaceMessage::ApplyMovesFromStart(moves) => {
-            board = original_board;
-            for a_move in moves.split_whitespace() {
-               board = board.apply_move(a_move.parse().unwrap());
-            }
-         }
          InterfaceMessage::Go(depth) => {
-            let (_eval, best_move) = search(depth, board);
+            let (eval, best_move) = search(depth, &state);
+            if state.side_to_move == Color::Black {
+               // eval is always relative to side to move, but we want eval to be + for white and - for black
+               last_eval = -eval;
+            }
             sender.send(EngineMessage::BestMove(best_move)).unwrap();
          }
          InterfaceMessage::QueryEval => {
-            // TODO: this seems wrong. we evaluated this at a much greater depth, so we should save that.
-            sender.send(EngineMessage::CurrentEval(evaluate(&board))).unwrap();
+            sender.send(EngineMessage::CurrentEval(last_eval)).unwrap();
+         }
+         InterfaceMessage::SetState(new_state) => {
+            state = new_state;
          }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
@@ -36,23 +32,28 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
    }
 }
 
-fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
+fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
+   if state.prior_positions.get(&state.position).cloned().unwrap_or(0) >= 2 {
+      return (0.0, None);
+   }
    let search_time_start = Instant::now();
    let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
-   let moves = board.gen_moves(true);
+   let moves = state.gen_moves(true);
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
-   if moves.is_empty() && !board.in_check(board.side_to_move) {
-      // stalemate
-      max = 0.0;
+   if moves.is_empty() && !state.in_check(state.side_to_move) {
+      return (0.0, None);
+   }
+   if !moves.is_empty() && state.halfmove_clock >= 100 {
+      return (0.0, None);
    }
    let scores: Vec<_> = moves
       .into_par_iter()
       .map(|(a_move, new_board)| {
          let mut ne = 0;
          let mut ng = 0;
-         let score: f64 = -nega_max(
+         let score = -nega_max(
             depth - 1,
             new_board,
             std::f64::NEG_INFINITY,
@@ -86,25 +87,32 @@ fn search(depth: u64, board: Board) -> (f64, Option<Move>) {
 
 fn nega_max(
    depth: u64,
-   board: Board,
+   state: State,
    mut alpha: f64,
    beta: f64,
    nodes_expanded: &mut u64,
    nodes_generated: &mut u64,
 ) -> f64 {
+   if state.prior_positions.get(&state.position).cloned().unwrap_or(0) >= 2 {
+      return 0.0;
+   }
    if depth == 0 {
-      return evaluate(&board);
+      return evaluate(&state);
    }
    let mut max: f64 = std::f64::NEG_INFINITY;
-   let moves = board.gen_moves(true);
+   let mut moves = state.gen_moves(true);
+   moves.sort_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
-   if moves.is_empty() && !board.in_check(board.side_to_move) {
+   if moves.is_empty() && !state.in_check(state.side_to_move) {
       // stalemate
-      max = 0.0;
+      return 0.0;
+   }
+   if !moves.is_empty() && state.halfmove_clock >= 100 {
+      return 0.0;
    }
    for (_, new_board) in moves {
-      let score: f64 = -nega_max(depth - 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
+      let score = -nega_max(depth - 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
       if score > max {
          max = score;
       }
@@ -132,25 +140,31 @@ fn mat_val(piece: Piece) -> f64 {
    }
 }
 
-fn evaluate(board: &Board) -> f64 {
+fn evaluate(state: &State) -> f64 {
    use crate::board::Color;
 
    // material
-   let white_mat_score = board
+   let white_mat_score = state
+      .position
       .squares
+      .0
       .iter()
       .filter(|x| x.color() == Some(Color::White))
       .fold(0.0, |acc, x| acc + mat_val(x.piece()));
-   let black_mat_score = board
+   let black_mat_score = state
+      .position
       .squares
+      .0
       .iter()
       .filter(|x| x.color() == Some(Color::Black))
       .fold(0.0, |acc, x| acc + mat_val(x.piece()));
    let mat_score = white_mat_score as f64 - black_mat_score as f64;
 
    // distance bonus
-   let white_dist_score = board
+   let white_dist_score = state
+      .position
       .squares
+      .0
       .iter()
       .enumerate()
       .filter(|(_, x)| x.color() == Some(Color::White))
@@ -159,8 +173,10 @@ fn evaluate(board: &Board) -> f64 {
          let dist = 7 - row;
          acc + dist as f64
       });
-   let black_dist_score = board
+   let black_dist_score = state
+      .position
       .squares
+      .0
       .iter()
       .enumerate()
       .filter(|(_, x)| x.color() == Some(Color::Black))
@@ -172,7 +188,7 @@ fn evaluate(board: &Board) -> f64 {
 
    let final_score = mat_score * 0.9 + dist_score * 0.1;
 
-   if board.side_to_move == Color::White {
+   if state.side_to_move == Color::White {
       final_score
    } else {
       -final_score

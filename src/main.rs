@@ -1,3 +1,4 @@
+#![feature(await_macro, async_await, futures_api)]
 #![feature(try_blocks)]
 #![feature(try_from)]
 #![feature(duration_float)]
@@ -31,7 +32,8 @@ fn main() {
       engine::start(ite_rx, eti_tx);
    });
 
-   ite_tx.send(messages::InterfaceMessage::Go(6)).unwrap();
+   //ite_tx.send(messages::InterfaceMessage::Go(6)).unwrap();
+   //let _ = eti_rx.recv().unwrap();
 
    if opt.lichess {
       lichess::main_loop(ite_tx, eti_rx)

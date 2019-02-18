@@ -1,4 +1,6 @@
+use crate::board::{Color, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
+use fnv::FnvHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::{self, StatusCode};
@@ -7,6 +9,8 @@ use serde_json;
 use std::env;
 use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 const RESPONSES: [&str; 14] = [
    "if you think i'm moving righteous then",
@@ -41,12 +45,12 @@ struct ChallengeOuter {
 struct ChallengeInner {
    id: String,
    rated: bool,
-   variant: Variant
+   variant: Variant,
 }
 
 #[derive(Deserialize)]
 struct Variant {
-   key: String
+   key: String,
 }
 
 #[derive(Deserialize)]
@@ -105,8 +109,12 @@ enum GameEvent {
    chatLine(ChatLine),
 }
 
+type EngineInterface = Arc<Mutex<(mpsc::Sender<InterfaceMessage>, mpsc::Receiver<EngineMessage>)>>;
+
 #[allow(clippy::cyclomatic_complexity)] //temporary, we need to replace with async
 pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
+   let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
+
    let env_api_token = match env::var("LICHESS_API_TOKEN") {
       Ok(token) => Some(token),
       Err(env::VarError::NotPresent) => {
@@ -150,7 +158,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
 
    let user_id = user.id;
    let username = user.username;
-   if user.title == Some("BOT".into()) {
+   if user.title.as_ref().map(String::as_str) == Some("BOT") {
       info!("Lichess user is a bot account, proceeding.");
    } else {
       info!("Attempting to upgrade account to bot...");
@@ -163,11 +171,14 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
          info!("Upgrade to bot account OK, proceeding.");
       } else {
          error!("Failed to upgrade account to bot, and account is not already a bot. Can't proceed.");
+         return;
       }
    }
 
+   let games_in_progress = Arc::new(Mutex::new(FnvHashSet::with_hasher(Default::default())));
+   // Accept first challenge
+   // TODO: we are silently ignoring errors by being flat
    loop {
-      // Accept first challenge
       let challenge_stream = BufReader::new(
          client
             .get("https://lichess.org/api/stream/event")
@@ -175,133 +186,173 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
             .send()
             .unwrap(),
       );
-      for line in challenge_stream.lines() {
-         let line = line.unwrap();
-         if line.is_empty() {
-            continue;
-         }
-         let event: Event = serde_json::from_str(&line).unwrap();
+      for event in challenge_stream
+         .lines()
+         .flatten()
+         .filter(|x| !x.is_empty())
+         .flat_map(|x| serde_json::from_str(&x))
+      {
          match event {
             Event::challenge(challenge_outer) => {
                let challenge_id = challenge_outer.challenge.id;
-               if !challenge_outer.challenge.rated && challenge_outer.challenge.variant.key == "standard" {
-                  let challenge_accept_res = client
-                     .post(&format!("https://lichess.org/api/challenge/{}/accept", challenge_id))
+               if challenge_outer.challenge.rated
+                  || (challenge_outer.challenge.variant.key != "standard"
+                     && challenge_outer.challenge.variant.key != "fromPosition")
+               {
+                  let challenge_reject_res = client
+                     .post(&format!("https://lichess.org/api/challenge/{}/decline", challenge_id))
                      .bearer_auth(&api_token)
                      .send()
                      .unwrap();
-                  if challenge_accept_res.status() != StatusCode::OK {
-                     warn!("Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.")
+                  if challenge_reject_res.status() != StatusCode::OK {
+                     warn!("Failed to reject challenge. Perhaps the challenge was revoked. Proceeding.")
                   }
+               }
+               if games_in_progress.lock().unwrap().len() >= 2 {
+                  continue;
+               }
+               let challenge_accept_res = client
+                  .post(&format!("https://lichess.org/api/challenge/{}/accept", challenge_id))
+                  .bearer_auth(&api_token)
+                  .send()
+                  .unwrap();
+               if challenge_accept_res.status() != StatusCode::OK {
+                  warn!("Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.")
                }
             }
             Event::gameStart(game_outer) => {
-               let game_id = game_outer.game.id;
-               let game_stream = BufReader::new(
-                  client
-                     .get(&format!("https://lichess.org/api/bot/game/stream/{}", game_id))
-                     .bearer_auth(&api_token)
-                     .send()
-                     .unwrap(),
-               );
-               let mut we_are_white = false;
-               for line in game_stream.lines() {
-                  let line = line.unwrap();
-                  if line.is_empty() {
+               {
+                  if games_in_progress.lock().unwrap().contains(&game_outer.game.id) {
                      continue;
                   }
-                  let game_event: GameEvent = serde_json::from_str(&line).unwrap();
-                  match game_event {
-                     GameEvent::gameFull(full_game) => {
-                        if full_game.white.id == user_id {
-                           we_are_white = true;
-                        }
-                        let initial_fen = if full_game.initialFen == "startpos" {
-                           String::from(crate::board::START_FEN)
-                        } else {
-                           full_game.initialFen
-                        };
-                        sender.send(InterfaceMessage::NewGameFEN(initial_fen)).unwrap();
-                        sender
-                           .send(InterfaceMessage::ApplyMovesFromStart(full_game.state.moves.clone()))
-                           .unwrap();
-                        if (full_game.state.moves.split_whitespace().count() % 2 == 0 && we_are_white)
-                           || (full_game.state.moves.split_whitespace().count() % 2 != 0 && !we_are_white)
-                        {
-                           think_and_move(&client, &game_id, &api_token, &sender, &receiver);
-                        }
-                     }
-                     GameEvent::gameState(game_state) => {
-                        sender
-                           .send(InterfaceMessage::ApplyMovesFromStart(game_state.moves.clone()))
-                           .unwrap();
-                        if (game_state.moves.split_whitespace().count() % 2 == 0 && we_are_white)
-                           || (game_state.moves.split_whitespace().count() % 2 != 0 && !we_are_white)
-                        {
-                           think_and_move(&client, &game_id, &api_token, &sender, &receiver);
-                        }
-                     }
-                     GameEvent::chatLine(chat_line) => {
-                        if chat_line.text == "!eval" {
-                           sender.send(InterfaceMessage::QueryEval).unwrap();
-                           let eval = match receiver.recv().unwrap() {
-                              EngineMessage::CurrentEval(e) => e,
-                              _ => panic!("expected current eval from the engine!"),
-                           };
-                           let body = [("room", &chat_line.room), ("text", &eval.to_string())];
-                           let _chat_res = client
-                              .post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
-                              .bearer_auth(&api_token)
-                              .form(&body)
-                              .send()
-                              .unwrap();
-                        } else if chat_line.room == "player"
-                           && chat_line.username != username
-                           && chat_line.username != "lichess"
-                        {
-                           let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
-                           let body = [("room", "player"), ("text", chat_saying)];
-                           let _chat_res = client
-                              .post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
-                              .bearer_auth(&api_token)
-                              .form(&body)
-                              .send()
-                              .unwrap();
-                        }
-                     }
-                  }
                }
+               let cc = client.clone();
+               let atc = api_token.clone();
+               let uc = username.clone();
+               let uidc = user_id.clone();
+               let eic = engine_interface.clone();
+               {
+                  games_in_progress.lock().unwrap().insert(game_outer.game.id.clone());
+               }
+               let gipc = games_in_progress.clone();
+               std::thread::spawn(move || {
+                  manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc);
+               });
+            }
+         }
+      }
+      std::thread::sleep(Duration::from_secs(1));
+   }
+}
+
+fn manage_game(
+   client: reqwest::Client,
+   game_id: String,
+   api_token: String,
+   username: String,
+   user_id: String,
+   ei: EngineInterface,
+   games_in_progress: Arc<Mutex<FnvHashSet<String>>>,
+) {
+   let game_stream = BufReader::new(
+      client
+         .get(&format!("https://lichess.org/api/bot/game/stream/{}", game_id))
+         .bearer_auth(&api_token)
+         .send()
+         .unwrap(),
+   );
+   let mut us_color = Color::Black;
+   let mut initial_game_state = State::from_start();
+   for game_event in game_stream
+      .lines()
+      .flatten()
+      .filter(|x| !x.is_empty())
+      .flat_map(|x| serde_json::from_str(&x))
+   {
+      match game_event {
+         GameEvent::gameFull(full_game) => {
+            if full_game.white.id == user_id {
+               us_color = Color::White;
+            }
+            initial_game_state = if full_game.initialFen == "startpos" {
+               State::from_start()
+            } else {
+               State::from_fen(&full_game.initialFen).unwrap()
+            };
+            let cur_game_state = initial_game_state.apply_moves_from_uci(&full_game.state.moves);
+            if cur_game_state.side_to_move == us_color {
+               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state);
+            }
+         }
+         GameEvent::gameState(game_state_json) => {
+            let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
+            if cur_game_state.side_to_move == us_color {
+               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state);
+            }
+         }
+         GameEvent::chatLine(chat_line) => {
+            if chat_line.text == "!eval" {
+               let ei = ei.lock().unwrap();
+               ei.0.send(InterfaceMessage::QueryEval).unwrap();
+               let eval = match ei.1.recv().unwrap() {
+                  EngineMessage::CurrentEval(e) => e,
+                  _ => panic!("expected current eval from the engine!"),
+               };
+               let body = [("room", &chat_line.room), ("text", &eval.to_string())];
+               let _chat_res = client
+                  .post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
+                  .bearer_auth(&api_token)
+                  .form(&body)
+                  .send()
+                  .unwrap();
+            } else if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
+               let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
+               let body = [("room", "player"), ("text", chat_saying)];
+               let _chat_res = client
+                  .post(&format!("https://lichess.org/api/bot/game/{}/chat", game_id))
+                  .bearer_auth(&api_token)
+                  .form(&body)
+                  .send()
+                  .unwrap();
             }
          }
       }
    }
+   games_in_progress.lock().unwrap().remove(&game_id);
 }
 
-fn think_and_move(
-   client: &reqwest::Client,
-   game_id: &str,
-   api_token: &str,
-   sender: &mpsc::Sender<InterfaceMessage>,
-   receiver: &mpsc::Receiver<EngineMessage>,
-) {
-   sender.send(InterfaceMessage::Go(6)).unwrap();
+fn think_and_move(client: &reqwest::Client, game_id: &str, api_token: &str, ei: &EngineInterface, state: State) {
+   let ei = ei.lock().unwrap();
+   ei.0.send(InterfaceMessage::SetState(state)).unwrap();
+   ei.0.send(InterfaceMessage::Go(6)).unwrap();
    trace!("Our move! Thinking...");
-   let engine_move_opt = match receiver.recv().unwrap() {
-      EngineMessage::BestMove(e) => e,
+   let e_move = match ei.1.recv().unwrap() {
+      EngineMessage::BestMove(best_move_opt) => {
+         if let Some(best_move) = best_move_opt {
+            best_move
+         } else {
+            // probably end of game
+            // could be bug in the engine
+            return;
+         }
+      }
       _ => panic!("expected a move in response from the engine!"),
    };
-   if let Some(e_move) = engine_move_opt {
-      trace!("Decided on {}", e_move);
-      let make_move_res = client
-         .post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, e_move))
+   trace!("Decided on {}", e_move);
+   let make_move_res = client
+      .post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, e_move))
+      .bearer_auth(&api_token)
+      .send()
+      .unwrap();
+   if make_move_res.status() != StatusCode::OK {
+      error!(
+         "tried to make move {} and it was rejected. resigning and moving on",
+         e_move
+      );
+      let _resign_res = client
+         .post(&format!("https://lichess.org/api/bot/game/{}/resign", game_id))
          .bearer_auth(&api_token)
          .send()
          .unwrap();
-      if make_move_res.status() != StatusCode::OK {
-         error!("tried to make move {} and it was rejected", e_move);
-         panic!();
-      }
-   } else {
-      trace!("Drat, mated.")
    }
 }
