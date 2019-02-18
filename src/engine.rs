@@ -55,6 +55,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
          let mut ng = 0;
          let score = -nega_max(
             depth - 1,
+            1,
             new_board,
             std::f64::NEG_INFINITY,
             std::f64::INFINITY,
@@ -87,6 +88,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
 
 fn nega_max(
    depth: u64,
+   dist_from_root: u64,
    state: State,
    mut alpha: f64,
    beta: f64,
@@ -99,7 +101,7 @@ fn nega_max(
    if depth == 0 {
       return evaluate(&state);
    }
-   let mut max: f64 = std::f64::NEG_INFINITY;
+   let mut max: f64 = -10000.0 + dist_from_root as f64;
    let mut moves = state.gen_moves(true);
    moves.sort_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
@@ -112,7 +114,7 @@ fn nega_max(
       return 0.0;
    }
    for (_, new_board) in moves {
-      let score = -nega_max(depth - 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
+      let score = -nega_max(depth - 1, dist_from_root + 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
       if score > max {
          max = score;
       }
