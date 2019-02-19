@@ -434,7 +434,15 @@ impl State {
          }
       }
 
-      let mut new_prior_positions = self.prior_positions.clone();
+      let mut new_prior_positions = if new_halfmove_clock == 0 {
+         // This is an optimization - if an irreversible move is played
+         // (which resets halfmove clock)
+         // then a threefold repetition from any prior state is impossible
+         // this lets us clone less memory
+         FnvHashMap::with_hasher(Default::default())
+      } else {
+         self.prior_positions.clone()
+      };
       *new_prior_positions.entry(self.position).or_insert(0) += 1;
 
       State {

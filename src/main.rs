@@ -38,6 +38,7 @@ fn main() {
 
    return;
    */
+
    
    if opt.lichess {
       lichess::main_loop(ite_tx, eti_rx)
