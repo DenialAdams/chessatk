@@ -103,7 +103,7 @@ fn nega_max(
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
    let mut moves = state.gen_moves(true);
-   moves.sort_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
+   moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
    if moves.is_empty() && !state.in_check(state.side_to_move) {
