@@ -9,8 +9,8 @@ use std::time::Instant;
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut state = State::from_start();
    let mut last_eval = 0.0f64;
-   loop {
-      match receiver.recv().unwrap() {
+   while let Ok(message) = receiver.recv() {
+      match message {
          InterfaceMessage::Go(depth) => {
             let (eval, best_move) = search(depth, &state);
             if state.side_to_move == Color::Black {
@@ -145,49 +145,27 @@ fn mat_val(piece: Piece) -> f64 {
 fn evaluate(state: &State) -> f64 {
    use crate::board::Color;
 
-   // material
-   let white_mat_score = state
-      .position
-      .squares
-      .0
-      .iter()
-      .filter(|x| x.color() == Some(Color::White))
-      .fold(0.0, |acc, x| acc + mat_val(x.piece()));
-   let black_mat_score = state
-      .position
-      .squares
-      .0
-      .iter()
-      .filter(|x| x.color() == Some(Color::Black))
-      .fold(0.0, |acc, x| acc + mat_val(x.piece()));
-   let mat_score = white_mat_score as f64 - black_mat_score as f64;
+   let mut white_mat_score = 0.0;
+   let mut black_mat_score = 0.0;
+   let mut white_dist_score = 0.0;
+   let mut black_dist_score = 0.0;
+   for (i, square) in state.position.squares.0.iter().enumerate() {
+      if square.color() == Some(Color::White) {
+         white_mat_score += mat_val(square.piece());
 
-   // distance bonus
-   let white_dist_score = state
-      .position
-      .squares
-      .0
-      .iter()
-      .enumerate()
-      .filter(|(_, x)| x.color() == Some(Color::White))
-      .fold(0.0f64, |acc, (i, _)| {
          let row = i / 8;
          let dist = 7 - row;
-         acc + dist as f64
-      });
-   let black_dist_score = state
-      .position
-      .squares
-      .0
-      .iter()
-      .enumerate()
-      .filter(|(_, x)| x.color() == Some(Color::Black))
-      .fold(0.0f64, |acc, (i, _)| {
-         let row = i / 8;
-         acc + row as f64
-      });
-   let dist_score = white_dist_score - black_dist_score;
+         white_dist_score += dist as f64;
+      } else if square.color() == Some(Color::Black) {
+         black_mat_score += mat_val(square.piece());
 
+         let row = i / 8;
+         black_dist_score += row as f64;
+      }
+   }
+
+   let mat_score = white_mat_score as f64 - black_mat_score as f64;
+   let dist_score = white_dist_score - black_dist_score;
    let final_score = mat_score * 0.9 + dist_score * 0.1;
 
    if state.side_to_move == Color::White {

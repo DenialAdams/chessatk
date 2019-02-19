@@ -458,7 +458,7 @@ impl State {
    }
 
    fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<(Move, State)> {
-      let mut results = Vec::new();
+      let mut results = Vec::with_capacity(64);
       for (i, square) in self
          .position
          .squares
