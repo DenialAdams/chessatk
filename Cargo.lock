@@ -102,6 +102,7 @@ dependencies = [
  "reqwest 0.9.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.87 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
+ "smallvec 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

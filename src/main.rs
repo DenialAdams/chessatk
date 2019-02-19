@@ -32,13 +32,12 @@ fn main() {
       engine::start(ite_rx, eti_tx);
    });
 
-   /*
-   ite_tx.send(messages::InterfaceMessage::Go(6)).unwrap();
+   let mut state = crate::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();
+   ite_tx.send(messages::InterfaceMessage::SetState(state)).unwrap();
+   ite_tx.send(messages::InterfaceMessage::GoDepth(6)).unwrap();
    let _ = eti_rx.recv().unwrap();
 
    return;
-   */
-
    
    if opt.lichess {
       lichess::main_loop(ite_tx, eti_rx)

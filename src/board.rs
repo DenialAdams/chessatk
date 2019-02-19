@@ -1,6 +1,6 @@
-use fnv::FnvHashMap;
 use std::fmt;
 use std::str::FromStr;
+use smallvec::SmallVec;
 
 pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PROMOTION_TARGETS: [PromotionTarget; 4] = [
@@ -168,7 +168,7 @@ pub struct Position {
 #[derive(Clone, PartialEq, Eq)]
 pub struct State {
    pub position: Position,
-   pub prior_positions: FnvHashMap<Position, u8>,
+   pub prior_positions: SmallVec<[Position; 8]>,
    pub side_to_move: Color,
    pub halfmove_clock: u64,
    pub fullmove_number: u64,
@@ -439,11 +439,11 @@ impl State {
          // (which resets halfmove clock)
          // then a threefold repetition from any prior state is impossible
          // this lets us clone less memory
-         FnvHashMap::with_hasher(Default::default())
+         SmallVec::new()
       } else {
          self.prior_positions.clone()
       };
-      *new_prior_positions.entry(self.position).or_insert(0) += 1;
+      new_prior_positions.push(self.position);
 
       State {
          position: Position {
@@ -466,7 +466,7 @@ impl State {
    }
 
    fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<(Move, State)> {
-      let mut results = Vec::with_capacity(64);
+      let mut results = Vec::with_capacity(256);
       for (i, square) in self
          .position
          .squares
@@ -810,7 +810,7 @@ impl State {
             black_queenside_castle: bqc,
             en_passant_square,
          },
-         prior_positions: FnvHashMap::with_hasher(Default::default()),
+         prior_positions: SmallVec::new(),
          side_to_move,
          halfmove_clock,
          fullmove_number,

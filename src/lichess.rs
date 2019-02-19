@@ -91,6 +91,8 @@ struct GameFull {
 #[derive(Deserialize)]
 struct GameState {
    moves: String,
+   wtime: u64,
+   btime: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -235,6 +237,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                   games_in_progress.lock().unwrap().insert(game_outer.game.id.clone());
                }
                let gipc = games_in_progress.clone();
+               trace!("joining game {}", game_outer.game.id);
                std::thread::spawn(move || {
                   manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc);
                });
@@ -263,12 +266,15 @@ fn manage_game(
    );
    let mut us_color = Color::Black;
    let mut initial_game_state = State::from_start();
-   for game_event in game_stream
+   for line in game_stream
       .lines()
-      .flatten()
-      .filter(|x| !x.is_empty())
-      .flat_map(|x| serde_json::from_str(&x))
    {
+      let line = line.unwrap();
+      let line = line.trim();
+      if line.is_empty() {
+         continue;
+      }
+      let game_event = serde_json::from_str(&line).unwrap();
       match game_event {
          GameEvent::gameFull(full_game) => {
             if full_game.white.id == user_id {
@@ -279,15 +285,31 @@ fn manage_game(
             } else {
                State::from_fen(&full_game.initialFen).unwrap()
             };
+            let remaining_time = Duration::from_millis(match us_color {
+               Color::White => {
+                  full_game.state.wtime
+               }
+               Color::Black => {
+                  full_game.state.btime
+               }
+            });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&full_game.state.moves);
             if cur_game_state.side_to_move == us_color {
-               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state);
+               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state, remaining_time);
             }
          }
          GameEvent::gameState(game_state_json) => {
+            let remaining_time = Duration::from_millis(match us_color {
+               Color::White => {
+                  game_state_json.wtime
+               }
+               Color::Black => {
+                  game_state_json.btime
+               }
+            });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
             if cur_game_state.side_to_move == us_color {
-               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state);
+               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state, remaining_time);
             }
          }
          GameEvent::chatLine(chat_line) => {
@@ -321,10 +343,10 @@ fn manage_game(
    games_in_progress.lock().unwrap().remove(&game_id);
 }
 
-fn think_and_move(client: &reqwest::Client, game_id: &str, api_token: &str, ei: &EngineInterface, state: State) {
+fn think_and_move(client: &reqwest::Client, game_id: &str, api_token: &str, ei: &EngineInterface, state: State, remaining_time: Duration) {
    let ei = ei.lock().unwrap();
    ei.0.send(InterfaceMessage::SetState(state)).unwrap();
-   ei.0.send(InterfaceMessage::Go(6)).unwrap();
+   ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();
    trace!("Our move! Thinking...");
    let e_move = match ei.1.recv().unwrap() {
       EngineMessage::BestMove(best_move_opt) => {

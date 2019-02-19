@@ -4,20 +4,38 @@ use log::trace;
 use rayon::prelude::*;
 use std;
 use std::sync::mpsc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut state = State::from_start();
    let mut last_eval = 0.0f64;
    while let Ok(message) = receiver.recv() {
       match message {
-         InterfaceMessage::Go(depth) => {
+         InterfaceMessage::GoDepth(depth) => {
             let (eval, best_move) = search(depth, &state);
             if state.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
                last_eval = -eval;
             }
             sender.send(EngineMessage::BestMove(best_move)).unwrap();
+         }
+         InterfaceMessage::GoTime(time_budget) => {
+            let mut used_time = Duration::from_secs(0);
+            let mut depth = 1;
+            let (mut overall_eval, mut overall_best_move) = (0.0, None);
+            while used_time * 2 < time_budget {
+               let start = Instant::now();
+               let (eval, best_move) = search(depth, &state);
+               overall_eval = eval;
+               overall_best_move = best_move;
+               depth += 1;
+               used_time += start.elapsed();
+            }
+            if state.side_to_move == Color::Black {
+               // eval is always relative to side to move, but we want eval to be + for white and - for black
+               last_eval = -overall_eval;
+            }
+            sender.send(EngineMessage::BestMove(overall_best_move)).unwrap();
          }
          InterfaceMessage::QueryEval => {
             sender.send(EngineMessage::CurrentEval(last_eval)).unwrap();
@@ -33,7 +51,7 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
 }
 
 fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
-   if state.prior_positions.get(&state.position).cloned().unwrap_or(0) >= 2 {
+   if state.prior_positions.iter().filter(|x| **x == state.position).count() >= 2 {
       return (0.0, None);
    }
    let search_time_start = Instant::now();
@@ -95,7 +113,7 @@ fn nega_max(
    nodes_expanded: &mut u64,
    nodes_generated: &mut u64,
 ) -> f64 {
-   if state.prior_positions.get(&state.position).cloned().unwrap_or(0) >= 2 {
+   if state.prior_positions.iter().filter(|x| **x == state.position).count() >= 2 {
       return 0.0;
    }
    if depth == 0 {
