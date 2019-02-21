@@ -7,7 +7,7 @@ authors = ["Richard McCormack <brick@brick.codes>"]
 [profile.release] 
 debug = true
 #lto = true
-#codegen-units = 1
+codegen-units = 1
 
 [dependencies]
 hyper = "0.12"

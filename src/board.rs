@@ -1,5 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
+use std::ops::{Generator, GeneratorState};
 use smallvec::SmallVec;
 
 pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -165,13 +166,12 @@ pub struct Position {
    pub en_passant_square: Option<u8>,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct State {
    pub position: Position,
    pub prior_positions: SmallVec<[Position; 8]>,
    pub side_to_move: Color,
    pub halfmove_clock: u64,
-   pub fullmove_number: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -315,13 +315,6 @@ impl State {
          self.halfmove_clock + 1
       };
 
-      // Fullmove number
-      let new_fullmove_number = if self.side_to_move == Color::White {
-         self.fullmove_number
-      } else {
-         self.fullmove_number + 1
-      };
-
       // Piece movement
       let mut new_squares = self.position.squares;
       {
@@ -457,7 +450,6 @@ impl State {
          prior_positions: new_prior_positions,
          side_to_move: !self.side_to_move,
          halfmove_clock: new_halfmove_clock,
-         fullmove_number: new_fullmove_number,
       }
    }
 
@@ -466,7 +458,7 @@ impl State {
    }
 
    fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<(Move, State)> {
-      let mut results = Vec::with_capacity(256);
+      let mut results = Vec::with_capacity(128);
       for (i, square) in self
          .position
          .squares
@@ -712,7 +704,7 @@ impl State {
       let mut wqc = false;
       let mut bkc = false;
       let mut bqc = false;
-      if !(castling.len() == 1 && castling[0] == b'-') {
+      if castling.get(0).cloned() != Some(b'-') {
          for ascii_char in castling.iter() {
             match *ascii_char {
                b'K' => {
@@ -791,16 +783,6 @@ impl State {
          }
       };
 
-      let fullmove_number: u64 = match fen_sections[5].parse() {
-         Ok(val) => val,
-         Err(e) => {
-            return Err(format!(
-               "malformed FEN; fullmove number value {} couldn't be parsed as a number: {}",
-               fen_sections[5], e
-            ));
-         }
-      };
-
       Ok(State {
          position: Position {
             squares: Board(squares),
@@ -813,7 +795,6 @@ impl State {
          prior_positions: SmallVec::new(),
          side_to_move,
          halfmove_clock,
-         fullmove_number,
       })
    }
 }
