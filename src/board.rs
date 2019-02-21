@@ -1,6 +1,5 @@
 use std::fmt;
 use std::str::FromStr;
-use std::ops::{Generator, GeneratorState};
 use smallvec::SmallVec;
 
 pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -166,6 +165,131 @@ pub struct Position {
    pub en_passant_square: Option<u8>,
 }
 
+impl Position {
+   fn apply_move(&self, a_move: Move) -> Position {
+      // Piece movement
+      let mut new_squares = self.squares;
+      {
+         if let Some(promotion_target) = a_move.promotion {
+            // Handle promotion
+            let new_piece_white = self.squares[a_move.origin].color() == Some(Color::White);
+            match promotion_target {
+               PromotionTarget::Knight => {
+                  if new_piece_white {
+                     new_squares[a_move.destination] = Square::WhiteKnight
+                  } else {
+                     new_squares[a_move.destination] = Square::BlackKnight
+                  }
+               }
+               PromotionTarget::Bishop => {
+                  if new_piece_white {
+                     new_squares[a_move.destination] = Square::WhiteBishop
+                  } else {
+                     new_squares[a_move.destination] = Square::BlackBishop
+                  }
+               }
+               PromotionTarget::Rook => {
+                  if new_piece_white {
+                     new_squares[a_move.destination] = Square::WhiteRook
+                  } else {
+                     new_squares[a_move.destination] = Square::BlackRook
+                  }
+               }
+               PromotionTarget::Queen => {
+                  if new_piece_white {
+                     new_squares[a_move.destination] = Square::WhiteQueen
+                  } else {
+                     new_squares[a_move.destination] = Square::BlackQueen
+                  }
+               }
+            }
+         } else {
+            // Normal case
+            new_squares[a_move.destination] = self.squares[a_move.origin];
+         }
+         new_squares[a_move.origin] = Square::Empty; // End original piece movement
+      }
+
+      // Castling
+      let mut white_kingside_castle = self.white_kingside_castle;
+      let mut white_queenside_castle = self.white_queenside_castle;
+      let mut black_kingside_castle = self.black_kingside_castle;
+      let mut black_queenside_castle = self.black_queenside_castle;
+      // If king moved, do castling rook movement (potentially) and revoke castling rights (always)
+      // If pawn moved, do en-passant checking
+      let mut en_passant_square = None;
+      {
+         match new_squares[a_move.destination] {
+            Square::WhiteKing => {
+               white_kingside_castle = false;
+               white_queenside_castle = false;
+               if a_move.origin == 60 && a_move.destination == 62 {
+                  // WKC
+                  new_squares[63] = Square::Empty;
+                  new_squares[61] = Square::WhiteRook;
+               } else if a_move.origin == 60 && a_move.destination == 58 {
+                  // WQC
+                  new_squares[56] = Square::Empty;
+                  new_squares[59] = Square::WhiteRook;
+               }
+            }
+            Square::BlackKing => {
+               black_kingside_castle = false;
+               black_queenside_castle = false;
+               if a_move.origin == 4 && a_move.destination == 6 {
+                  // BKC
+                  new_squares[7] = Square::Empty;
+                  new_squares[5] = Square::BlackRook;
+               } else if a_move.origin == 4 && a_move.destination == 2 {
+                  // BQC
+                  new_squares[0] = Square::Empty;
+                  new_squares[3] = Square::BlackRook;
+               }
+            }
+            Square::WhitePawn => {
+               if a_move.origin - a_move.destination == 16 {
+                  en_passant_square = Some(a_move.destination + 8);
+               } else if Some(a_move.destination) == self.en_passant_square {
+                  new_squares[(a_move.destination + 8)] = Square::Empty;
+               }
+            }
+            Square::BlackPawn => {
+               if a_move.destination - a_move.origin == 16 {
+                  en_passant_square = Some(a_move.destination - 8);
+               } else if Some(a_move.destination) == self.en_passant_square {
+                  new_squares[(a_move.destination - 8)] = Square::Empty;
+               }
+            }
+            _ => {
+               // No special treatment needed
+            }
+         }
+      }
+
+      // Revoke castling rights if rook moved
+      {
+         if a_move.origin == 63 {
+            white_kingside_castle = false;
+         } else if a_move.origin == 56 {
+            white_queenside_castle = false;
+         } else if a_move.origin == 7 {
+            black_kingside_castle = false;
+         } else if a_move.origin == 0 {
+            black_queenside_castle = false;
+         }
+      }
+
+      Position {
+         squares: new_squares,
+         white_kingside_castle,
+         white_queenside_castle,
+         black_kingside_castle,
+         black_queenside_castle,
+         en_passant_square,
+      }
+   }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct State {
    pub position: Position,
@@ -315,118 +439,6 @@ impl State {
          self.halfmove_clock + 1
       };
 
-      // Piece movement
-      let mut new_squares = self.position.squares;
-      {
-         if let Some(promotion_target) = a_move.promotion {
-            // Handle promotion
-            let new_piece_white = self.position.squares[a_move.origin].color() == Some(Color::White);
-            match promotion_target {
-               PromotionTarget::Knight => {
-                  if new_piece_white {
-                     new_squares[a_move.destination] = Square::WhiteKnight
-                  } else {
-                     new_squares[a_move.destination] = Square::BlackKnight
-                  }
-               }
-               PromotionTarget::Bishop => {
-                  if new_piece_white {
-                     new_squares[a_move.destination] = Square::WhiteBishop
-                  } else {
-                     new_squares[a_move.destination] = Square::BlackBishop
-                  }
-               }
-               PromotionTarget::Rook => {
-                  if new_piece_white {
-                     new_squares[a_move.destination] = Square::WhiteRook
-                  } else {
-                     new_squares[a_move.destination] = Square::BlackRook
-                  }
-               }
-               PromotionTarget::Queen => {
-                  if new_piece_white {
-                     new_squares[a_move.destination] = Square::WhiteQueen
-                  } else {
-                     new_squares[a_move.destination] = Square::BlackQueen
-                  }
-               }
-            }
-         } else {
-            // Normal case
-            new_squares[a_move.destination] = self.position.squares[a_move.origin];
-         }
-         new_squares[a_move.origin] = Square::Empty; // End original piece movement
-      }
-
-      // Castling
-      let mut white_kingside_castle = self.position.white_kingside_castle;
-      let mut white_queenside_castle = self.position.white_queenside_castle;
-      let mut black_kingside_castle = self.position.black_kingside_castle;
-      let mut black_queenside_castle = self.position.black_queenside_castle;
-      // If king moved, do castling rook movement (potentially) and revoke castling rights (always)
-      // If pawn moved, do en-passant checking
-      let mut en_passant_square = None;
-      {
-         match new_squares[a_move.destination] {
-            Square::WhiteKing => {
-               white_kingside_castle = false;
-               white_queenside_castle = false;
-               if a_move.origin == 60 && a_move.destination == 62 {
-                  // WKC
-                  new_squares[63] = Square::Empty;
-                  new_squares[61] = Square::WhiteRook;
-               } else if a_move.origin == 60 && a_move.destination == 58 {
-                  // WQC
-                  new_squares[56] = Square::Empty;
-                  new_squares[59] = Square::WhiteRook;
-               }
-            }
-            Square::BlackKing => {
-               black_kingside_castle = false;
-               black_queenside_castle = false;
-               if a_move.origin == 4 && a_move.destination == 6 {
-                  // BKC
-                  new_squares[7] = Square::Empty;
-                  new_squares[5] = Square::BlackRook;
-               } else if a_move.origin == 4 && a_move.destination == 2 {
-                  // BQC
-                  new_squares[0] = Square::Empty;
-                  new_squares[3] = Square::BlackRook;
-               }
-            }
-            Square::WhitePawn => {
-               if a_move.origin - a_move.destination == 16 {
-                  en_passant_square = Some(a_move.destination + 8);
-               } else if Some(a_move.destination) == self.position.en_passant_square {
-                  new_squares[(a_move.destination + 8)] = Square::Empty;
-               }
-            }
-            Square::BlackPawn => {
-               if a_move.destination - a_move.origin == 16 {
-                  en_passant_square = Some(a_move.destination - 8);
-               } else if Some(a_move.destination) == self.position.en_passant_square {
-                  new_squares[(a_move.destination - 8)] = Square::Empty;
-               }
-            }
-            _ => {
-               // No special treatment needed
-            }
-         }
-      }
-
-      // Revoke castling rights if rook moved
-      {
-         if a_move.origin == 63 {
-            white_kingside_castle = false;
-         } else if a_move.origin == 56 {
-            white_queenside_castle = false;
-         } else if a_move.origin == 7 {
-            black_kingside_castle = false;
-         } else if a_move.origin == 0 {
-            black_queenside_castle = false;
-         }
-      }
-
       let mut new_prior_positions = if new_halfmove_clock == 0 {
          // This is an optimization - if an irreversible move is played
          // (which resets halfmove clock)
@@ -439,14 +451,7 @@ impl State {
       new_prior_positions.push(self.position);
 
       State {
-         position: Position {
-            squares: new_squares,
-            white_kingside_castle,
-            white_queenside_castle,
-            black_kingside_castle,
-            black_queenside_castle,
-            en_passant_square,
-         },
+         position: self.position.apply_move(a_move),
          prior_positions: new_prior_positions,
          side_to_move: !self.side_to_move,
          halfmove_clock: new_halfmove_clock,

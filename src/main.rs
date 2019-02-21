@@ -2,7 +2,6 @@
 #![feature(try_blocks)]
 #![feature(try_from)]
 #![feature(duration_float)]
-#![feature(generators, generator_trait)]
 
 mod board;
 mod engine;
