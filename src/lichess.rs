@@ -266,9 +266,7 @@ fn manage_game(
    );
    let mut us_color = Color::Black;
    let mut initial_game_state = State::from_start();
-   for line in game_stream
-      .lines()
-   {
+   for line in game_stream.lines() {
       let line = line.unwrap();
       let line = line.trim();
       if line.is_empty() {
@@ -286,12 +284,8 @@ fn manage_game(
                State::from_fen(&full_game.initialFen).unwrap()
             };
             let remaining_time = Duration::from_millis(match us_color {
-               Color::White => {
-                  full_game.state.wtime
-               }
-               Color::Black => {
-                  full_game.state.btime
-               }
+               Color::White => full_game.state.wtime,
+               Color::Black => full_game.state.btime,
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&full_game.state.moves);
             if cur_game_state.side_to_move == us_color {
@@ -300,12 +294,8 @@ fn manage_game(
          }
          GameEvent::gameState(game_state_json) => {
             let remaining_time = Duration::from_millis(match us_color {
-               Color::White => {
-                  game_state_json.wtime
-               }
-               Color::Black => {
-                  game_state_json.btime
-               }
+               Color::White => game_state_json.wtime,
+               Color::Black => game_state_json.btime,
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
             if cur_game_state.side_to_move == us_color {
@@ -343,7 +333,14 @@ fn manage_game(
    games_in_progress.lock().unwrap().remove(&game_id);
 }
 
-fn think_and_move(client: &reqwest::Client, game_id: &str, api_token: &str, ei: &EngineInterface, state: State, remaining_time: Duration) {
+fn think_and_move(
+   client: &reqwest::Client,
+   game_id: &str,
+   api_token: &str,
+   ei: &EngineInterface,
+   state: State,
+   remaining_time: Duration,
+) {
    let ei = ei.lock().unwrap();
    ei.0.send(InterfaceMessage::SetState(state)).unwrap();
    ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();

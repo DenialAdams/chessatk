@@ -1,4 +1,4 @@
-use crate::board::{Color, Move, State};
+use crate::board::{Color, Move, Position, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rayon::prelude::*;
@@ -60,7 +60,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let moves = state.gen_moves(true);
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
-   if moves.is_empty() && !state.in_check(state.side_to_move) {
+   if moves.is_empty() && !state.position.in_check(state.side_to_move) {
       return (0.0, None);
    }
    if !moves.is_empty() && state.halfmove_clock >= 100 {
@@ -68,13 +68,14 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    }
    let scores: Vec<_> = moves
       .into_par_iter()
-      .map(|(a_move, new_board)| {
+      .map(|a_move| {
+         let new_state = state.apply_move(a_move);
          let mut ne = 0;
          let mut ng = 0;
          let score = -nega_max(
             depth - 1,
             1,
-            new_board,
+            new_state,
             std::f64::NEG_INFINITY,
             std::f64::INFINITY,
             &mut ne,
@@ -117,22 +118,30 @@ fn nega_max(
       return 0.0;
    }
    if depth == 0 {
-      return evaluate(&state);
+      return evaluate(&state.position, state.side_to_move);
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
    let mut moves = state.gen_moves(true);
-   moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
+   //moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
-   if moves.is_empty() && !state.in_check(state.side_to_move) {
+   if moves.is_empty() && !state.position.in_check(state.side_to_move) {
       // stalemate
       return 0.0;
    }
    if !moves.is_empty() && state.halfmove_clock >= 100 {
       return 0.0;
    }
-   for (_, new_board) in moves {
-      let score = -nega_max(depth - 1, dist_from_root + 1, new_board, -beta, -alpha, nodes_expanded, nodes_generated);
+   for a_move in moves {
+      let score = -nega_max(
+         depth - 1,
+         dist_from_root + 1,
+         state.apply_move(a_move),
+         -beta,
+         -alpha,
+         nodes_expanded,
+         nodes_generated,
+      );
       if score > max {
          max = score;
       }
@@ -160,14 +169,14 @@ fn mat_val(piece: Piece) -> f64 {
    }
 }
 
-fn evaluate(state: &State) -> f64 {
+fn evaluate(position: &Position, side_to_move: Color) -> f64 {
    use crate::board::Color;
 
    let mut white_mat_score = 0.0;
    let mut black_mat_score = 0.0;
    let mut white_dist_score = 0.0;
    let mut black_dist_score = 0.0;
-   for (i, square) in state.position.squares.0.iter().enumerate() {
+   for (i, square) in position.squares.0.iter().enumerate() {
       if square.color() == Some(Color::White) {
          white_mat_score += mat_val(square.piece());
 
@@ -186,7 +195,7 @@ fn evaluate(state: &State) -> f64 {
    let dist_score = white_dist_score - black_dist_score;
    let final_score = mat_score * 0.9 + dist_score * 0.1;
 
-   if state.side_to_move == Color::White {
+   if side_to_move == Color::White {
       final_score
    } else {
       -final_score

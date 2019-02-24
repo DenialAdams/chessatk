@@ -8,6 +8,7 @@ authors = ["Richard McCormack <brick@brick.codes>"]
 debug = true
 #lto = true
 codegen-units = 1
+panic = "abort"
 
 [dependencies]
 hyper = "0.12"

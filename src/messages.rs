@@ -5,7 +5,7 @@ use std::time::Duration;
 
 // Interface to Engine
 pub(crate) enum InterfaceMessage {
-   GoDepth(u64),   // Calculate until depth and respond with the best move
+   GoDepth(u64), // Calculate until depth and respond with the best move
    GoTime(Duration),
    QueryEval, // Query the evaluation of the current game state
    SetState(State),
