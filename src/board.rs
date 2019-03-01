@@ -300,7 +300,7 @@ impl Position {
       }
    }
 
-   fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<Move> {
+   pub fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<Move> {
       let mut results = Vec::with_capacity(128);
       for (i, square) in self
          .squares
@@ -403,49 +403,65 @@ impl Position {
                      if self.black_kingside_castle
                         && self.squares[5] == Square::Empty
                         && self.squares[6] == Square::Empty
-                        && !self.squares_attacked(color, &[4, 5, 6])
                      {
-                        results.push(Move {
+                        let a_move = Move {
                            origin: 4,
                            destination: 6,
                            promotion: None,
-                        });
+                        };
+                        let mut new_board = self.clone();
+                        new_board.apply_move(a_move);
+                        if !new_board.squares_attacked(color, &[4, 5, 6]) {
+                           results.push(a_move);
+                        }
                      }
                      if self.black_queenside_castle
                         && self.squares[3] == Square::Empty
                         && self.squares[2] == Square::Empty
                         && self.squares[1] == Square::Empty
-                        && !self.squares_attacked(color, &[4, 3, 2])
                      {
-                        results.push(Move {
+                        let a_move = Move {
                            origin: 4,
                            destination: 2,
                            promotion: None,
-                        });
+                        };
+                        let mut new_board = self.clone();
+                        new_board.apply_move(a_move);
+                        if !new_board.squares_attacked(color, &[4, 3, 2]) {
+                           results.push(a_move);
+                        }
                      }
                   } else {
                      if self.white_kingside_castle
                         && self.squares[61] == Square::Empty
                         && self.squares[62] == Square::Empty
-                        && !self.squares_attacked(color, &[60, 61, 62])
                      {
-                        results.push(Move {
+                        let a_move = Move {
                            origin: 60,
                            destination: 62,
                            promotion: None,
-                        });
+                        };
+                        let mut new_board = self.clone();
+                        new_board.apply_move(a_move);
+                        if !new_board.squares_attacked(color, &[60, 61, 62]) {
+                           results.push(a_move);
+                        }
                      }
                      if self.white_queenside_castle
                         && self.squares[59] == Square::Empty
                         && self.squares[58] == Square::Empty
                         && self.squares[57] == Square::Empty
-                        && !self.squares_attacked(color, &[60, 59, 58])
                      {
-                        results.push(Move {
+                        let a_move = Move {
                            origin: 60,
                            destination: 58,
                            promotion: None,
-                        });
+                        };
+                        let mut new_board = self.clone();
+                        new_board.apply_move(a_move);
+                        if !new_board.squares_attacked(color, &[60, 59, 58]) {
+                           results.push(a_move);
+                        }
                      }
                   }
                }
