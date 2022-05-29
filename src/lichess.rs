@@ -1,6 +1,6 @@
 use crate::board::{Color, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
-use fnv::FnvHashSet;
+use fxhash::FxHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::StatusCode;
@@ -177,7 +177,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
       }
    }
 
-   let games_in_progress = Arc::new(Mutex::new(FnvHashSet::with_hasher(Default::default())));
+   let games_in_progress = Arc::new(Mutex::new(FxHashSet::with_hasher(Default::default())));
    // Accept first challenge
    // TODO: we are silently ignoring errors by being flat
    loop {
@@ -255,7 +255,7 @@ fn manage_game(
    username: String,
    user_id: String,
    ei: EngineInterface,
-   games_in_progress: Arc<Mutex<FnvHashSet<String>>>,
+   games_in_progress: Arc<Mutex<FxHashSet<String>>>,
 ) {
    let game_stream = BufReader::new(
       client
