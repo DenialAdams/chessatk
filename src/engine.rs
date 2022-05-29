@@ -2,7 +2,6 @@ use crate::board::{Color, Move, Position, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rayon::prelude::*;
-use std;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 

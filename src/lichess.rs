@@ -5,7 +5,6 @@ use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::StatusCode;
 use serde::Deserialize;
-use serde_json;
 use std::env;
 use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc;
@@ -160,7 +159,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
 
    let user_id = user.id;
    let username = user.username;
-   if user.title.as_ref().map(String::as_str) == Some("BOT") {
+   if user.title.as_deref() == Some("BOT") {
       info!("Lichess user is a bot account, proceeding.");
    } else {
       info!("Attempting to upgrade account to bot...");
@@ -272,7 +271,7 @@ fn manage_game(
       if line.is_empty() {
          continue;
       }
-      let game_event = serde_json::from_str(&line).unwrap();
+      let game_event = serde_json::from_str(line).unwrap();
       match game_event {
          GameEvent::gameFull(full_game) => {
             if full_game.white.id == user_id {

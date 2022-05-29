@@ -43,7 +43,7 @@ impl std::ops::Not for Color {
    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Piece {
    Empty,
    Pawn,
