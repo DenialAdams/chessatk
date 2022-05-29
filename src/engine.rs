@@ -96,11 +96,20 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
       nodes_generated,
       nodes_expanded
    );
-   trace!(
-      "search @ depth {} took {}",
-      depth,
-      search_time_start.elapsed().as_secs_f64()
-   );
+   if let Some(b) = best_move {
+      trace!(
+         "search @ depth {} took {}. best move: {}",
+         depth,
+         search_time_start.elapsed().as_secs_f64(),
+         b
+      );
+   } else {
+      trace!(
+         "search @ depth {} took {}. game over",
+         depth,
+         search_time_start.elapsed().as_secs_f64(),
+      );
+   }
    (max, best_move)
 }
 
