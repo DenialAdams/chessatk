@@ -3,7 +3,7 @@ use crate::messages::{EngineMessage, InterfaceMessage};
 use fnv::FnvHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
-use reqwest::{self, StatusCode};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use serde_json;
 use std::env;
@@ -149,7 +149,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
       }
    };
 
-   let client = reqwest::Client::new();
+   let client = reqwest::blocking::Client::new();
    let user: User = client
       .get("https://lichess.org/api/account")
       .bearer_auth(&api_token)
@@ -249,7 +249,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
 }
 
 fn manage_game(
-   client: reqwest::Client,
+   client: reqwest::blocking::Client,
    game_id: String,
    api_token: String,
    username: String,
@@ -334,7 +334,7 @@ fn manage_game(
 }
 
 fn think_and_move(
-   client: &reqwest::Client,
+   client: &reqwest::blocking::Client,
    game_id: &str,
    api_token: &str,
    ei: &EngineInterface,
