@@ -73,16 +73,16 @@ enum Event {
 #[derive(Deserialize)]
 struct Player {
    id: String,
-   name: String,
+   //name: String,
 }
 
 #[derive(Deserialize)]
 #[allow(non_snake_case)]
 struct GameFull {
    id: String,
-   rated: bool,
+   //rated: bool,
    white: Player,
-   black: Player,
+   //black: Player,
    initialFen: String,
    state: GameState,
 }
@@ -112,7 +112,17 @@ enum GameEvent {
 
 type EngineInterface = Arc<Mutex<(mpsc::Sender<InterfaceMessage>, mpsc::Receiver<EngineMessage>)>>;
 
-#[allow(clippy::cognitive_complexity)] //temporary, we need to replace with async
+fn read_api_token() -> Result<String, io::Error> {
+   let mut line_buf = String::new();
+
+   println!("Lichess API token: ");
+
+   let _ = io::stdin().read_line(&mut line_buf)?;
+   let _ = line_buf.pop();
+
+   Ok(line_buf)
+}
+
 pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
 
@@ -123,7 +133,6 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
          None
       }
       Err(env::VarError::NotUnicode(_)) => {
-         // TODO WARN
          warn!("Lichess API token environment variable found, but with invalid unicode. Ignoring.");
          None
       }
@@ -134,16 +143,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
          info!("Found lichess api token in environment, using that and proceeding.");
          token
       } else {
-         let api_token: Result<String, io::Error> = try {
-            let mut line_buf = String::new();
-
-            println!("Lichess API token: ");
-
-            let _ = io::stdin().read_line(&mut line_buf)?;
-            let _ = line_buf.pop();
-
-            line_buf
-         };
+         let api_token: Result<String, io::Error> = read_api_token();
          api_token.unwrap()
       }
    };
@@ -274,6 +274,7 @@ fn manage_game(
       let game_event = serde_json::from_str(line).unwrap();
       match game_event {
          GameEvent::gameFull(full_game) => {
+            trace!("Beginning game {}", full_game.id);
             if full_game.white.id == user_id {
                us_color = Color::White;
             }

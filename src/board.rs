@@ -885,7 +885,7 @@ impl State {
 
 fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Move>, do_check_checking: bool) {
    let i = origin;
-   if i >= 48 && i <= 55 {
+   if (48..=55).contains(&i) {
       // 2 SQUARE MOVEMENT
       if cur_position.squares[(i - 16)] == Square::Empty && cur_position.squares[(i - 8)] == Square::Empty {
          let a_move = Move {
@@ -904,7 +904,7 @@ fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Mov
          }
       }
    }
-   if i >= 8 && i <= 15 {
+   if (8..=15).contains(&i)  {
       // CAPTURE + PROMOTION
       {
          let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
@@ -1001,7 +1001,7 @@ fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Mov
 
 fn black_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Move>, do_check_checking: bool) {
    let i = origin;
-   if i >= 8 && i <= 15 {
+   if (8..=15).contains(&i)  {
       // 2 SQUARE MOVEMENT
       if cur_position.squares[(i + 16)] == Square::Empty && cur_position.squares[(i + 8)] == Square::Empty {
          let a_move = Move {
@@ -1020,7 +1020,7 @@ fn black_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Mov
          }
       }
    }
-   if i >= 48 && i <= 55 {
+   if (48..=55).contains(&i) {
       // CAPTURE + PROMOTION
       {
          let pot_squares = [i + 7, i + 9];
@@ -1455,29 +1455,29 @@ mod tests {
    #[test]
    fn is_in_check_works() {
       let mut a = Position::from_moves("e2e4").unwrap();
-      assert_eq!(a.in_check(Color::White), false);
-      assert_eq!(a.in_check(Color::Black), false);
+      assert!(!a.in_check(Color::White));
+      assert!(!a.in_check(Color::Black));
       a = Position::from_moves("e2e4 e4e5 d1h5 a7a6 h5f7").unwrap();
-      assert_eq!(a.in_check(Color::White), false);
-      assert_eq!(a.in_check(Color::Black), true);
+      assert!(!a.in_check(Color::White));
+      assert!(a.in_check(Color::Black));
       a = Position::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2").unwrap();
-      assert_eq!(a.in_check(Color::White), true);
-      assert_eq!(a.in_check(Color::Black), false);
+      assert!(a.in_check(Color::White));
+      assert!(!a.in_check(Color::Black));
       a = Position::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2 b1d2 f8b4")
          .unwrap();
-      assert_eq!(a.in_check(Color::White), false);
-      assert_eq!(a.in_check(Color::Black), false);
+      assert!(!a.in_check(Color::White));
+      assert!(!a.in_check(Color::Black));
       a = Position::from_moves("a2a4 e7e5 a4a5 d7d5 a5a6 b7a6 b2b4 e5e4 c2c3 d5d4 c3d4 d8d4 e2e3 d4d2 b1d2 f8b4 d2e4")
          .unwrap();
-      assert_eq!(a.in_check(Color::White), true);
-      assert_eq!(a.in_check(Color::Black), false);
+      assert!(a.in_check(Color::White));
+      assert!(!a.in_check(Color::Black));
    }
 
    #[test]
    fn pawn_seventh_check_bug() {
       let a = Position::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2")
          .unwrap();
-      assert_eq!(a.in_check(Color::White), true);
+         assert!(a.in_check(Color::White));
    }
 
    #[test]
