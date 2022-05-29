@@ -904,7 +904,7 @@ fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Mov
          }
       }
    }
-   if (8..=15).contains(&i)  {
+   if (8..=15).contains(&i) {
       // CAPTURE + PROMOTION
       {
          let pot_squares = [i.wrapping_sub(7), i.wrapping_sub(9)];
@@ -1001,7 +1001,7 @@ fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Mov
 
 fn black_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Move>, do_check_checking: bool) {
    let i = origin;
-   if (8..=15).contains(&i)  {
+   if (8..=15).contains(&i) {
       // 2 SQUARE MOVEMENT
       if cur_position.squares[(i + 16)] == Square::Empty && cur_position.squares[(i + 8)] == Square::Empty {
          let a_move = Move {
@@ -1477,7 +1477,7 @@ mod tests {
    fn pawn_seventh_check_bug() {
       let a = Position::from_moves("g2g3 d7d5 g1f3 d5d4 h1g1 b8c6 g1h1 c8g4 f1g2 e7e5 h1f1 e5e4 f3h4 e4e3 h2h3 e3d2")
          .unwrap();
-         assert!(a.in_check(Color::White));
+      assert!(a.in_check(Color::White));
    }
 
    #[test]

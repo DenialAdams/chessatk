@@ -194,7 +194,8 @@ fn evaluate(position: &Position, side_to_move: Color) -> f64 {
 
    let mat_score = white_mat_score as f64 - black_mat_score as f64;
    let dist_score = white_dist_score - black_dist_score;
-   let mobility_score = position.gen_moves_color(Color::White, true).len() as f64 - position.gen_moves_color(Color::Black, true).len() as f64;
+   let mobility_score = position.gen_moves_color(Color::White, true).len() as f64
+      - position.gen_moves_color(Color::Black, true).len() as f64;
    let final_score = mat_score * 0.9 + mobility_score * 0.06 + dist_score * 0.04;
 
    if side_to_move == Color::White {

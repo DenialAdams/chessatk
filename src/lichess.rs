@@ -7,8 +7,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::env;
 use std::io::{self, BufRead, BufReader};
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 const RESPONSES: [&str; 14] = [
