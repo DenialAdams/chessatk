@@ -1,6 +1,5 @@
 #![feature(await_macro, async_await, futures_api)]
 #![feature(try_blocks)]
-#![feature(try_from)]
 #![feature(duration_float)]
 
 mod board;

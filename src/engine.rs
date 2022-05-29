@@ -100,7 +100,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    trace!(
       "search @ depth {} took {}",
       depth,
-      search_time_start.elapsed().as_float_secs()
+      search_time_start.elapsed().as_secs_f64()
    );
    (max, best_move)
 }
@@ -170,8 +170,6 @@ fn mat_val(piece: Piece) -> f64 {
 }
 
 fn evaluate(position: &Position, side_to_move: Color) -> f64 {
-   use crate::board::Color;
-
    let mut white_mat_score = 0.0;
    let mut black_mat_score = 0.0;
    let mut white_dist_score = 0.0;

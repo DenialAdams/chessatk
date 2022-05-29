@@ -113,7 +113,7 @@ enum GameEvent {
 
 type EngineInterface = Arc<Mutex<(mpsc::Sender<InterfaceMessage>, mpsc::Receiver<EngineMessage>)>>;
 
-#[allow(clippy::cyclomatic_complexity)] //temporary, we need to replace with async
+#[allow(clippy::cognitive_complexity)] //temporary, we need to replace with async
 pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
 

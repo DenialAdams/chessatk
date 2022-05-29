@@ -542,7 +542,7 @@ impl FromStr for Move {
       }
       let origin_square = &s[..2];
       let dest_square = &s[2..4];
-      let promotion_target = s.get(4..5).map(|x| x.parse::<PromotionTarget>());
+      let promotion_target = s.get(4..5).map(str::parse::<PromotionTarget>);
       let promotion_target = if let Some(result) = promotion_target {
          Some(result?)
       } else {
