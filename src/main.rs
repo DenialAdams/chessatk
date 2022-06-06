@@ -1,6 +1,7 @@
-#![feature(try_blocks)]
+#![feature(let_chains)]
 
 mod board;
+mod mcts;
 mod engine;
 mod lichess;
 mod messages;
@@ -20,6 +21,9 @@ struct Opt {
    /// Crude profiling mode
    #[structopt(short = "p", long = "profile")]
    profiling: bool,
+   /// monte carlo tree search w/ ucb1 instead of negamax
+   #[structopt(long = "mcts")]
+   mcts: bool,
 }
 
 fn main() {
@@ -28,9 +32,16 @@ fn main() {
 
    let (ite_tx, ite_rx) = mpsc::channel(); // Interface to Engine
    let (eti_tx, eti_rx) = mpsc::channel(); // Engine to Interface
-   thread::spawn(move || {
-      engine::start(ite_rx, eti_tx);
-   });
+
+   if opt.mcts {
+      thread::spawn(move || {
+         mcts::start(ite_rx, eti_tx);
+      });
+   } else {
+      thread::spawn(move || {
+         engine::start(ite_rx, eti_tx);
+      });
+   }
 
    if opt.profiling {
       let state = crate::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();

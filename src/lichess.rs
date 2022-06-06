@@ -91,6 +91,7 @@ struct GameState {
    moves: String,
    wtime: u64,
    btime: u64,
+   status: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -273,6 +274,10 @@ fn manage_game(
       let game_event = serde_json::from_str(line).unwrap();
       match game_event {
          GameEvent::gameFull(full_game) => {
+            if full_game.state.status != "created" && full_game.state.status != "started" {
+               break;
+            }
+
             trace!("Beginning game {}", full_game.id);
             if full_game.white.id == user_id {
                us_color = Color::White;
@@ -292,6 +297,10 @@ fn manage_game(
             }
          }
          GameEvent::gameState(game_state_json) => {
+            if game_state_json.status != "created" && game_state_json.status != "started" {
+               break;
+            }
+
             let remaining_time = Duration::from_millis(match us_color {
                Color::White => game_state_json.wtime,
                Color::Black => game_state_json.btime,
@@ -329,6 +338,7 @@ fn manage_game(
          }
       }
    }
+   trace!("Game {} ended", game_id);
    games_in_progress.lock().unwrap().remove(&game_id);
 }
 

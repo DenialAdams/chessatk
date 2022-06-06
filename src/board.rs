@@ -120,9 +120,7 @@ impl FromStr for PromotionTarget {
    }
 }
 
-// TODO: all this crap can drop and we can just derive once const generics
-// (actually indexing by u8 is kinda nice)
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Board(pub [Square; 64]);
 
 impl std::ops::Index<u8> for Board {
@@ -136,20 +134,6 @@ impl std::ops::Index<u8> for Board {
 impl std::ops::IndexMut<u8> for Board {
    fn index_mut(&mut self, index: u8) -> &mut Square {
       &mut self.0[index as usize]
-   }
-}
-
-impl PartialEq for Board {
-   fn eq(&self, other: &Board) -> bool {
-      self.0[..] == other.0[..]
-   }
-}
-
-impl Eq for Board {}
-
-impl std::hash::Hash for Board {
-   fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-      self.0[..].hash(state)
    }
 }
 
@@ -881,6 +865,34 @@ impl State {
          halfmove_clock,
       })
    }
+
+   pub fn status(&self, moves: &[Move]) -> GameStatus {
+      if self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
+         return GameStatus::Draw;
+      }
+      
+      if moves.is_empty() && !self.position.in_check(self.side_to_move) {
+         return GameStatus::Draw;
+      }
+
+      if !moves.is_empty() && self.halfmove_clock >= 100 {
+         return GameStatus::Draw;
+      }
+
+      if moves.is_empty() {
+         return GameStatus::Victory(!self.side_to_move);
+      }
+
+      GameStatus::Ongoing
+   }
+}
+
+
+#[derive(PartialEq, Eq)]
+pub enum GameStatus {
+   Draw,
+   Victory(Color),
+   Ongoing,
 }
 
 fn white_pawn_movegen(origin: u8, cur_position: &Position, results: &mut Vec<Move>, do_check_checking: bool) {
