@@ -772,7 +772,7 @@ impl State {
       let mut wqc = false;
       let mut bkc = false;
       let mut bqc = false;
-      if castling.get(0).cloned() != Some(b'-') {
+      if castling.first().cloned() != Some(b'-') {
          for ascii_char in castling.iter() {
             match *ascii_char {
                b'K' => {

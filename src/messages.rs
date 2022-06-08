@@ -8,7 +8,8 @@ pub(crate) enum InterfaceMessage {
    GoDepth(u64), // Calculate until depth and respond with the best move
    GoTime(Duration),
    QueryEval, // Query the evaluation of the current game state
-   SetState(State),
+   ApplyMove(Move), // Incremental state update (for engine optimizations)
+   SetState(State), // Full state update
 }
 
 // Engine to Interface

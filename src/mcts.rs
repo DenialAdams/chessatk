@@ -19,16 +19,14 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
             unreachable!()
          }
          InterfaceMessage::GoTime(time_budget) => {
-            mcts_state.reset();
-
-            let result = mcts(&mut mcts_state, &time_budget, &state, 0.7, &mut thread_rng());
+            let result = mcts(&mut mcts_state, &time_budget, &state, 1.414, &mut thread_rng());
             if state.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
                last_eval = -result.1;
             }
             trace!(
                "finished thinking after {} simulations",
-               mcts_state.tree.first().unwrap().stats.simulations,
+               mcts_state.tree[mcts_state.root].stats.simulations,
             );
             sender.send(EngineMessage::BestMove(result.0)).unwrap();
          }
@@ -36,7 +34,12 @@ pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Se
             sender.send(EngineMessage::CurrentEval(last_eval)).unwrap();
          }
          InterfaceMessage::SetState(new_state) => {
+            mcts_state.reset();
             state = new_state;
+         }
+         InterfaceMessage::ApplyMove(m) => {
+            mcts_state.move_root_down(m);
+            state = state.apply_move(m);
          }
       }
    }
@@ -64,7 +67,7 @@ fn ucb1(exploration_val: f64, node_stats: NodeStats, parent_simulations: u64) ->
 
 struct MctsState {
    tree: Vec<Node>,
-
+   root: usize,
 }
 
 impl MctsState {
@@ -84,7 +87,28 @@ impl MctsState {
 
       MctsState {
          tree,
+         root: 0,
       }
+   }
+
+   fn move_root_down(&mut self, a_move: Move) {
+      let new_root = self.tree[self.root]
+                  .children
+                  .iter()
+                  .find(|x| *self.tree[**x].last_move.as_ref().unwrap() == a_move);
+
+      if let Some(n) = new_root {
+         self.root = *n;
+      } else {
+         self.reset();
+      }
+
+      trace!("Moved MCTS root. New root has {} simulations", self.tree[self.root].stats.simulations);
+
+      // we could in theory try to "garbage collect" the
+      // now dead branches of the tree - not sure if reducing
+      // memory usage would help at all, or if it would just
+      // be overhead
    }
 
    fn reset(&mut self) {
@@ -100,6 +124,8 @@ impl MctsState {
             score: 0.0,
          },
       });
+
+      self.root = 0;
    }
 }
 
@@ -119,9 +145,15 @@ where
          let mut g = state.clone();
 
          // select / expand
-         let mut cur_node = 0;
+         let mut cur_node = mcts_state.root;
+         let mut moves;
          'outer: loop {
-            let moves = g.gen_moves(true);
+            moves = g.gen_moves(true);
+
+            if moves.is_empty() {
+               // terminal node
+               break;
+            }
 
             for a_move in moves.iter() {
                if !tree[cur_node]
@@ -159,15 +191,9 @@ where
                .max_by_key(|x| r64(ucb1(exploration_val, tree[**x].stats, tree[cur_node].stats.simulations)))
                .unwrap();
             g = g.apply_move(*tree[cur_node].last_move.as_ref().unwrap());
-
-            if tree[cur_node].children.is_empty() {
-               // terminal node
-               break;
-            }
          }
 
          // simulate (random rollout)
-         let mut moves = g.gen_moves(true);
          let mut g_status = g.status(&moves);
          while g_status == GameStatus::Ongoing {
             let rand_move = moves.choose(rng).unwrap();
@@ -190,7 +216,7 @@ where
                GameStatus::Ongoing => unreachable!(),
             }
             tree[cur_node].stats.simulations += 1;
-            if cur_node == 0 {
+            if cur_node == mcts_state.root {
                break;
             }
             cur_node = tree[cur_node].parent;
@@ -198,7 +224,7 @@ where
       }
    }
 
-   let best_child = tree[0]
+   let best_child = tree[mcts_state.root]
       .children
       .iter()
       .max_by_key(|x| tree[**x].stats.simulations)

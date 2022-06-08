@@ -1,10 +1,10 @@
-use crate::board::{Color, State};
+use crate::board::{Color, State, Move};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use fxhash::FxHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::env;
 use std::io::{self, BufRead, BufReader};
 use std::sync::{mpsc, Arc, Mutex};
@@ -101,6 +101,20 @@ struct ChatLine {
    room: String,
 }
 
+#[derive(Debug, Serialize)]
+struct AiChallenge {
+   level: u8, // 1..8
+   clock: Clock,
+   variant: String,
+}
+
+#[derive(Debug, Serialize)]
+struct Clock {
+   limit: u16, // 0..10800
+   increment: u8, // 0..60
+}
+
+
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 #[allow(non_camel_case_types)]
@@ -176,6 +190,19 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
       }
    }
 
+   let challenge_ai: Option<u8> = Some(1);
+
+   if let Some(level) = challenge_ai {
+      client.post("https://lichess.org/api/challenge/ai").bearer_auth(&api_token).json(&AiChallenge {
+         level,
+         clock: Clock {
+            limit: 900,
+            increment: 0,
+         },
+         variant: "standard".into(),
+      }).send().unwrap();
+   }
+
    let games_in_progress = Arc::new(Mutex::new(FxHashSet::with_hasher(Default::default())));
    // Accept first challenge
    // TODO: we are silently ignoring errors by being flat
@@ -209,7 +236,9 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
                      warn!("Failed to reject challenge. Perhaps the challenge was revoked. Proceeding.")
                   }
                }
-               if games_in_progress.lock().unwrap().len() >= 2 {
+               // todo: this is now hard set to 1. 1 engine to multiple games doesn't work due to engine optimizations
+               // to fix, need to have 1 engine per game ongoing? seems better
+               if games_in_progress.lock().unwrap().len() >= 1 {
                   continue;
                }
                let challenge_accept_res = client
@@ -292,8 +321,12 @@ fn manage_game(
                Color::Black => full_game.state.btime,
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&full_game.state.moves);
+            {
+               let ei = ei.lock().unwrap();
+               ei.0.send(InterfaceMessage::SetState(cur_game_state.clone())).unwrap();
+            }
             if cur_game_state.side_to_move == us_color {
-               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state, remaining_time);
+               think_and_move(&client, &game_id, &api_token, &ei, remaining_time);
             }
          }
          GameEvent::gameState(game_state_json) => {
@@ -307,7 +340,12 @@ fn manage_game(
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
             if cur_game_state.side_to_move == us_color {
-               think_and_move(&client, &game_id, &api_token, &ei, cur_game_state, remaining_time);
+               let last_move: Option<Move> = game_state_json.moves.split_whitespace().last().map(|x| x.parse().unwrap());
+               if let Some(m) = last_move {
+                  let ei = ei.lock().unwrap();
+                  ei.0.send(InterfaceMessage::ApplyMove(m)).unwrap();
+               }
+               think_and_move(&client, &game_id, &api_token, &ei, remaining_time);
             }
          }
          GameEvent::chatLine(chat_line) => {
@@ -347,16 +385,15 @@ fn think_and_move(
    game_id: &str,
    api_token: &str,
    ei: &EngineInterface,
-   state: State,
    remaining_time: Duration,
 ) {
    let ei = ei.lock().unwrap();
-   ei.0.send(InterfaceMessage::SetState(state)).unwrap();
    ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();
    trace!("Our move! Thinking...");
    let e_move = match ei.1.recv().unwrap() {
       EngineMessage::BestMove(best_move_opt) => {
          if let Some(best_move) = best_move_opt {
+            ei.0.send(InterfaceMessage::ApplyMove(best_move)).unwrap();
             best_move
          } else {
             // probably end of game
