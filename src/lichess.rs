@@ -71,7 +71,7 @@ enum Event {
 
 #[derive(Deserialize)]
 struct Player {
-   id: String,
+   id: Option<String>,
    //name: String,
 }
 
@@ -190,7 +190,7 @@ pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::
       }
    }
 
-   let challenge_ai: Option<u8> = Some(1);
+   let challenge_ai: Option<u8> = None;
 
    if let Some(level) = challenge_ai {
       client.post("https://lichess.org/api/challenge/ai").bearer_auth(&api_token).json(&AiChallenge {
@@ -308,7 +308,7 @@ fn manage_game(
             }
 
             trace!("Beginning game {}", full_game.id);
-            if full_game.white.id == user_id {
+            if full_game.white.id.as_ref() == Some(&user_id) {
                us_color = Color::White;
             }
             initial_game_state = if full_game.initialFen == "startpos" {
