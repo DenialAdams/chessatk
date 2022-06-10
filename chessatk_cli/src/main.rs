@@ -22,7 +22,8 @@ struct Opt {
    mcts: bool,
 }
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
    pretty_env_logger::init();
    let opt = Opt::from_args();
 
@@ -48,8 +49,8 @@ fn main() {
    }
 
    if opt.lichess {
-      lichess::main_loop(ite_tx, eti_rx)
+      lichess::main_loop(ite_tx, eti_rx).await;
    } else {
-      uci::main_loop(ite_tx, eti_rx)
+      uci::main_loop(ite_tx, eti_rx);
    }
 }

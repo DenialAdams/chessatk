@@ -21,7 +21,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
             let result = mcts(&mut mcts_state, &time_budget, &state, 1.414, &mut thread_rng());
             if state.position.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
-               last_eval = -result.1;
+               last_eval = 1.0-result.1;
             }
             trace!(
                "finished thinking after {} simulations",

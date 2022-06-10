@@ -5,10 +5,12 @@ use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncBufReadExt;
 use std::env;
-use std::io::{self, BufRead, BufReader};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
+use tokio_util::io::StreamReader;
+use futures::stream::TryStreamExt;
 
 const RESPONSES: [&str; 14] = [
    "if you think i'm moving righteous then",
@@ -126,18 +128,20 @@ enum GameEvent {
 
 type EngineInterface = Arc<Mutex<(mpsc::Sender<InterfaceMessage>, mpsc::Receiver<EngineMessage>)>>;
 
-fn read_api_token() -> Result<String, io::Error> {
+fn read_api_token() -> Result<String, std::io::Error> {
    let mut line_buf = String::new();
 
    println!("Lichess API token: ");
 
-   let _ = io::stdin().read_line(&mut line_buf)?;
+   let _ = std::io::stdin().read_line(&mut line_buf)?;
    let _ = line_buf.pop();
 
    Ok(line_buf)
 }
 
-pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
+fn convert_err(_err: reqwest::Error) -> std::io::Error { unimplemented!() }
+
+pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
 
    let env_api_token = match env::var("LICHESS_API_TOKEN") {
@@ -157,18 +161,20 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
          info!("Found lichess api token in environment, using that and proceeding.");
          token
       } else {
-         let api_token: Result<String, io::Error> = read_api_token();
+         let api_token: Result<String, std::io::Error> = read_api_token();
          api_token.unwrap()
       }
    };
 
-   let client = reqwest::blocking::Client::new();
+   let client = reqwest::Client::new();
    let user: User = client
       .get("https://lichess.org/api/account")
       .bearer_auth(&api_token)
       .send()
+      .await
       .unwrap()
       .json()
+      .await
       .unwrap();
 
    let user_id = user.id;
@@ -181,6 +187,7 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
          .post("https://lichess.org/api/bot/account/upgrade")
          .bearer_auth(&api_token)
          .send()
+         .await
          .unwrap();
       if bot_upgrade_res.status() == StatusCode::OK {
          info!("Upgrade to bot account OK, proceeding.");
@@ -200,26 +207,31 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
             increment: 0,
          },
          variant: "standard".into(),
-      }).send().unwrap();
+      }).send().await.unwrap();
    }
 
    let games_in_progress = Arc::new(Mutex::new(FxHashSet::with_hasher(Default::default())));
    // Accept first challenge
    // TODO: we are silently ignoring errors by being flat
    loop {
-      let challenge_stream = BufReader::new(
+      let challenge_stream = StreamReader::new(
          client
             .get("https://lichess.org/api/stream/event")
             .bearer_auth(&api_token)
             .send()
-            .unwrap(),
+            .await
+            .unwrap()
+            .bytes_stream()
+            .map_err(convert_err)
       );
-      for event in challenge_stream
-         .lines()
-         .flatten()
-         .filter(|x| !x.is_empty())
-         .flat_map(|x| serde_json::from_str(&x))
-      {
+      let mut lines = challenge_stream.lines();
+      while let Some(line) = lines.next_line().await.unwrap() {
+         let line = line.trim();
+         if line.is_empty() {
+            continue;
+         }
+         let event = serde_json::from_str(line).unwrap();
+
          match event {
             Event::challenge(challenge_outer) => {
                let challenge_id = challenge_outer.challenge.id;
@@ -231,6 +243,7 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
                      .post(&format!("https://lichess.org/api/challenge/{}/decline", challenge_id))
                      .bearer_auth(&api_token)
                      .send()
+                     .await
                      .unwrap();
                   if challenge_reject_res.status() != StatusCode::OK {
                      warn!("Failed to reject challenge. Perhaps the challenge was revoked. Proceeding.")
@@ -245,6 +258,7 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
                   .post(&format!("https://lichess.org/api/challenge/{}/accept", challenge_id))
                   .bearer_auth(&api_token)
                   .send()
+                  .await
                   .unwrap();
                if challenge_accept_res.status() != StatusCode::OK {
                   warn!("Failed to accept challenge. Perhaps the challenge was revoked. Proceeding.")
@@ -266,18 +280,17 @@ pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receive
                }
                let gipc = games_in_progress.clone();
                trace!("joining game {}", game_outer.game.id);
-               std::thread::spawn(move || {
-                  manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc);
+               tokio::spawn(async move {
+                  manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc).await;
                });
             }
          }
       }
-      std::thread::sleep(Duration::from_secs(1));
    }
 }
 
-fn manage_game(
-   client: reqwest::blocking::Client,
+async fn manage_game(
+   client: reqwest::Client,
    game_id: String,
    api_token: String,
    username: String,
@@ -285,17 +298,20 @@ fn manage_game(
    ei: EngineInterface,
    games_in_progress: Arc<Mutex<FxHashSet<String>>>,
 ) {
-   let game_stream = BufReader::new(
+   let game_stream = StreamReader::new(
       client
          .get(&format!("https://lichess.org/api/bot/game/stream/{}", game_id))
          .bearer_auth(&api_token)
          .send()
-         .unwrap(),
+         .await
+         .unwrap()
+         .bytes_stream()
+         .map_err(convert_err)
    );
    let mut us_color = Color::Black;
    let mut initial_game_state = State::from_start();
-   for line in game_stream.lines() {
-      let line = line.unwrap();
+   let mut game_stream_lines = game_stream.lines();
+   while let Some(line) = game_stream_lines.next_line().await.unwrap() {
       let line = line.trim();
       if line.is_empty() {
          continue;
@@ -326,7 +342,7 @@ fn manage_game(
                ei.0.send(InterfaceMessage::SetState(cur_game_state.clone())).unwrap();
             }
             if cur_game_state.position.side_to_move == us_color {
-               think_and_move(&client, &game_id, &api_token, &ei, remaining_time);
+               think_and_move(&client, &game_id, &api_token, &ei, remaining_time).await;
             }
          }
          GameEvent::gameState(game_state_json) => {
@@ -345,16 +361,18 @@ fn manage_game(
                   let ei = ei.lock().unwrap();
                   ei.0.send(InterfaceMessage::ApplyMove(m)).unwrap();
                }
-               think_and_move(&client, &game_id, &api_token, &ei, remaining_time);
+               think_and_move(&client, &game_id, &api_token, &ei, remaining_time).await;
             }
          }
          GameEvent::chatLine(chat_line) => {
             if chat_line.text == "!eval" {
-               let ei = ei.lock().unwrap();
-               ei.0.send(InterfaceMessage::QueryEval).unwrap();
-               let eval = match ei.1.recv().unwrap() {
-                  EngineMessage::CurrentEval(e) => e,
-                  _ => panic!("expected current eval from the engine!"),
+               let eval = {
+                  let ei = ei.lock().unwrap();
+                  ei.0.send(InterfaceMessage::QueryEval).unwrap();
+                  match ei.1.recv().unwrap() {
+                     EngineMessage::CurrentEval(e) => e,
+                     _ => panic!("expected current eval from the engine!"),
+                  }
                };
                let body = [("room", &chat_line.room), ("text", &eval.to_string())];
                let _chat_res = client
@@ -362,6 +380,7 @@ fn manage_game(
                   .bearer_auth(&api_token)
                   .form(&body)
                   .send()
+                  .await
                   .unwrap();
             } else if chat_line.room == "player" && chat_line.username != username && chat_line.username != "lichess" {
                let chat_saying = RESPONSES.choose(&mut rand::thread_rng()).unwrap();
@@ -371,6 +390,7 @@ fn manage_game(
                   .bearer_auth(&api_token)
                   .form(&body)
                   .send()
+                  .await
                   .unwrap();
             }
          }
@@ -380,34 +400,37 @@ fn manage_game(
    games_in_progress.lock().unwrap().remove(&game_id);
 }
 
-fn think_and_move(
-   client: &reqwest::blocking::Client,
+async fn think_and_move(
+   client: &reqwest::Client,
    game_id: &str,
    api_token: &str,
    ei: &EngineInterface,
    remaining_time: Duration,
 ) {
-   let ei = ei.lock().unwrap();
-   ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();
-   trace!("Our move! Thinking...");
-   let e_move = match ei.1.recv().unwrap() {
-      EngineMessage::BestMove(best_move_opt) => {
-         if let Some(best_move) = best_move_opt {
-            ei.0.send(InterfaceMessage::ApplyMove(best_move)).unwrap();
-            best_move
-         } else {
-            // probably end of game
-            // could be bug in the engine
-            return;
+   let e_move = {
+      let ei = ei.lock().unwrap();
+      ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();
+      trace!("Our move! Thinking...");
+      match ei.1.recv().unwrap() {
+         EngineMessage::BestMove(best_move_opt) => {
+            if let Some(best_move) = best_move_opt {
+               ei.0.send(InterfaceMessage::ApplyMove(best_move)).unwrap();
+               best_move
+            } else {
+               // probably end of game
+               // could be bug in the engine
+               return;
+            }
          }
+         _ => panic!("expected a move in response from the engine!"),
       }
-      _ => panic!("expected a move in response from the engine!"),
    };
    trace!("Decided on {}", e_move);
    let make_move_res = client
       .post(&format!("https://lichess.org/api/bot/game/{}/move/{}", game_id, e_move))
       .bearer_auth(&api_token)
       .send()
+      .await
       .unwrap();
    if make_move_res.status() != StatusCode::OK {
       error!(
@@ -418,6 +441,7 @@ fn think_and_move(
          .post(&format!("https://lichess.org/api/bot/game/{}/resign", game_id))
          .bearer_auth(&api_token)
          .send()
+         .await
          .unwrap();
    }
 }
