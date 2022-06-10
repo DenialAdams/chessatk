@@ -1,0 +1,12 @@
+[package]
+name = "chessatk_lib"
+edition = "2018"
+version = "0.1.0"
+authors = ["Richard McCormack <brick@brick.codes>"]
+
+[dependencies]
+rand = "0.8"
+log = "0.4"
+rayon = "1"
+smallvec = { version = "1", features = ["union"] }
+noisy_float = "0.2"

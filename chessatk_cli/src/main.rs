@@ -1,10 +1,6 @@
 #![feature(let_chains)]
 
-mod board;
-mod mcts;
-mod engine;
 mod lichess;
-mod messages;
 mod uci;
 
 use std::sync::mpsc;
@@ -35,18 +31,18 @@ fn main() {
 
    if opt.mcts {
       thread::spawn(move || {
-         mcts::start(ite_rx, eti_tx);
+         chessatk_lib::mcts::start(ite_rx, eti_tx);
       });
    } else {
       thread::spawn(move || {
-         engine::start(ite_rx, eti_tx);
+         chessatk_lib::engine::start(ite_rx, eti_tx);
       });
    }
 
    if opt.profiling {
-      let state = crate::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();
-      ite_tx.send(messages::InterfaceMessage::SetState(state)).unwrap();
-      ite_tx.send(messages::InterfaceMessage::GoDepth(5)).unwrap();
+      let state = chessatk_lib::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();
+      ite_tx.send(chessatk_lib::messages::InterfaceMessage::SetState(state)).unwrap();
+      ite_tx.send(chessatk_lib::messages::InterfaceMessage::GoDepth(5)).unwrap();
       let _ = eti_rx.recv().unwrap();
       return;
    }

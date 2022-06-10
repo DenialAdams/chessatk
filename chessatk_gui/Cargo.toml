@@ -1,0 +1,8 @@
+[package]
+name = "chessatk_gui"
+edition = "2021"
+version = "0.1.0"
+authors = ["Richard McCormack <brick@brick.codes>"]
+
+[dependencies]
+chessatk_lib = { path = "../chessatk_lib" }

@@ -4,7 +4,7 @@ use std::time::Duration;
 // Intraprocess Communication Messages
 
 // Interface to Engine
-pub(crate) enum InterfaceMessage {
+pub enum InterfaceMessage {
    GoDepth(u64), // Calculate until depth and respond with the best move
    GoTime(Duration),
    QueryEval, // Query the evaluation of the current game state
@@ -13,7 +13,7 @@ pub(crate) enum InterfaceMessage {
 }
 
 // Engine to Interface
-pub(crate) enum EngineMessage {
+pub enum EngineMessage {
    BestMove(Option<Move>),
    CurrentEval(f64),
 }

@@ -1,4 +1,4 @@
-use crate::board::{Color, Move, Position, State, GameStatus};
+use crate::board::{Color, Move, State, GameStatus};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rand::{Rng, thread_rng};
@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
+pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut state = State::from_start();
    let mut last_eval = 0.0f64;
    let mut mcts_state = MctsState::init();

@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-pub(crate) fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
+pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut state = State::from_start();
    let mut last_eval = 0.0f64;
    while let Ok(message) = receiver.recv() {

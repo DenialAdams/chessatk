@@ -1,5 +1,5 @@
-use crate::board::{Color, State, Move};
-use crate::messages::{EngineMessage, InterfaceMessage};
+use chessatk_lib::board::{Color, State, Move};
+use chessatk_lib::messages::{EngineMessage, InterfaceMessage};
 use fxhash::FxHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
@@ -137,7 +137,7 @@ fn read_api_token() -> Result<String, io::Error> {
    Ok(line_buf)
 }
 
-pub(crate) fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
+pub fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
 
    let env_api_token = match env::var("LICHESS_API_TOKEN") {
