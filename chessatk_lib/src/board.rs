@@ -147,6 +147,7 @@ pub struct Position {
    pub black_kingside_castle: bool,
    pub black_queenside_castle: bool,
    pub en_passant_square: Option<u8>,
+   pub side_to_move: Color,
 }
 
 impl std::fmt::Display for Position {
@@ -282,6 +283,8 @@ impl Position {
             self.black_queenside_castle = false;
          }
       }
+
+      self.side_to_move = !self.side_to_move;
    }
 
    pub fn gen_moves_color(&self, color: Color, do_check_checking: bool) -> Vec<Move> {
@@ -491,7 +494,6 @@ impl Position {
 pub struct State {
    pub position: Position,
    pub prior_positions: SmallVec<[Position; 8]>,
-   pub side_to_move: Color,
    pub halfmove_clock: u64,
 }
 
@@ -630,12 +632,11 @@ impl State {
          halfmove_clock: new_halfmove_clock,
          position: new_position,
          prior_positions: new_prior_positions,
-         side_to_move: !self.side_to_move,
       }
    }
 
    pub fn gen_moves(&self, do_check_checking: bool) -> Vec<Move> {
-      self.position.gen_moves_color(self.side_to_move, do_check_checking)
+      self.position.gen_moves_color(self.position.side_to_move, do_check_checking)
    }
 
    pub fn from_fen(fen: &str) -> Result<State, String> {
@@ -859,9 +860,9 @@ impl State {
             black_kingside_castle: bkc,
             black_queenside_castle: bqc,
             en_passant_square,
+            side_to_move,
          },
          prior_positions: SmallVec::new(),
-         side_to_move,
          halfmove_clock,
       })
    }
@@ -871,7 +872,7 @@ impl State {
          return GameStatus::Draw;
       }
       
-      if moves.is_empty() && !self.position.in_check(self.side_to_move) {
+      if moves.is_empty() && !self.position.in_check(self.position.side_to_move) {
          return GameStatus::Draw;
       }
 
@@ -880,7 +881,7 @@ impl State {
       }
 
       if moves.is_empty() {
-         return GameStatus::Victory(!self.side_to_move);
+         return GameStatus::Victory(!self.position.side_to_move);
       }
 
       GameStatus::Ongoing

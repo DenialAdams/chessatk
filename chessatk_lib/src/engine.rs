@@ -12,7 +12,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
       match message {
          InterfaceMessage::GoDepth(depth) => {
             let (eval, best_move) = search(depth, &state);
-            if state.side_to_move == Color::Black {
+            if state.position.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
                last_eval = -eval;
             }
@@ -30,7 +30,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
                depth += 1;
                used_time += start.elapsed();
             }
-            if state.side_to_move == Color::Black {
+            if state.position.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
                last_eval = -overall_eval;
             }
@@ -62,7 +62,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let moves = state.gen_moves(true);
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
-   if moves.is_empty() && !state.position.in_check(state.side_to_move) {
+   if moves.is_empty() && !state.position.in_check(state.position.side_to_move) {
       return (0.0, None);
    }
    if !moves.is_empty() && state.halfmove_clock >= 100 {
@@ -129,14 +129,14 @@ fn nega_max(
       return 0.0;
    }
    if depth == 0 {
-      return evaluate(&state.position, state.side_to_move);
+      return evaluate(&state.position, state.position.side_to_move);
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
    let moves = state.gen_moves(true);
    //moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
-   if moves.is_empty() && !state.position.in_check(state.side_to_move) {
+   if moves.is_empty() && !state.position.in_check(state.position.side_to_move) {
       // stalemate
       return 0.0;
    }

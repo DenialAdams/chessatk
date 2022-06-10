@@ -325,7 +325,7 @@ fn manage_game(
                let ei = ei.lock().unwrap();
                ei.0.send(InterfaceMessage::SetState(cur_game_state.clone())).unwrap();
             }
-            if cur_game_state.side_to_move == us_color {
+            if cur_game_state.position.side_to_move == us_color {
                think_and_move(&client, &game_id, &api_token, &ei, remaining_time);
             }
          }
@@ -339,7 +339,7 @@ fn manage_game(
                Color::Black => game_state_json.btime,
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
-            if cur_game_state.side_to_move == us_color {
+            if cur_game_state.position.side_to_move == us_color {
                let last_move: Option<Move> = game_state_json.moves.split_whitespace().last().map(|x| x.parse().unwrap());
                if let Some(m) = last_move {
                   let ei = ei.lock().unwrap();

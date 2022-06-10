@@ -4,7 +4,6 @@ use log::trace;
 use rand::{Rng, thread_rng};
 use rand::prelude::SliceRandom;
 use noisy_float::prelude::*;
-use rayon::prelude::*;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -20,7 +19,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
          }
          InterfaceMessage::GoTime(time_budget) => {
             let result = mcts(&mut mcts_state, &time_budget, &state, 1.414, &mut thread_rng());
-            if state.side_to_move == Color::Black {
+            if state.position.side_to_move == Color::Black {
                // eval is always relative to side to move, but we want eval to be + for white and - for black
                last_eval = -result.1;
             }
@@ -165,7 +164,7 @@ where
                   tree[cur_node].children.push(new_node_id);
                   tree.push(Node {
                      last_move: Some(*a_move),
-                     last_player: Some(g.side_to_move),
+                     last_player: Some(g.position.side_to_move),
                      parent: cur_node,
                      children: vec![],
                      stats: NodeStats {
