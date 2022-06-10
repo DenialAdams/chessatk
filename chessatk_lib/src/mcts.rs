@@ -150,7 +150,7 @@ where
          'outer: loop {
             moves = g.gen_moves(true);
 
-            if moves.is_empty() {
+            if g.status(&moves) != GameStatus::Ongoing {
                // terminal node
                break;
             }
