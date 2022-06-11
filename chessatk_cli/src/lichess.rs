@@ -54,13 +54,13 @@ struct Variant {
 }
 
 #[derive(Deserialize)]
-struct Game {
+struct GameInfo {
    id: String,
 }
 
 #[derive(Deserialize)]
 struct GameStart {
-   game: Game,
+   game: GameInfo,
 }
 
 #[derive(Deserialize)]
@@ -69,6 +69,7 @@ struct GameStart {
 enum Event {
    challenge(ChallengeOuter),
    gameStart(GameStart),
+   gameFinish(GameStart),
 }
 
 #[derive(Deserialize)]
@@ -283,6 +284,9 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
                tokio::spawn(async move {
                   manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc).await;
                });
+            }
+            Event::gameFinish(_game_outer) => {
+               continue;
             }
          }
       }
