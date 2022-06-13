@@ -10,3 +10,4 @@ log = "0.4"
 rayon = "1"
 smallvec = { version = "1", features = ["union"] }
 noisy_float = "0.2"
+parking_lot = "0.12"

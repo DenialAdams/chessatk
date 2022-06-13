@@ -1,16 +1,16 @@
-use chessatk_lib::board::{Color, State, Move};
+use chessatk_lib::board::{Color, Move, State};
 use chessatk_lib::messages::{EngineMessage, InterfaceMessage};
+use futures::stream::TryStreamExt;
 use fxhash::FxHashSet;
 use log::{error, info, trace, warn};
 use rand::seq::SliceRandom;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use tokio::io::AsyncBufReadExt;
 use std::env;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
+use tokio::io::AsyncBufReadExt;
 use tokio_util::io::StreamReader;
-use futures::stream::TryStreamExt;
 
 const RESPONSES: [&str; 14] = [
    "if you think i'm moving righteous then",
@@ -113,10 +113,9 @@ struct AiChallenge {
 
 #[derive(Debug, Serialize)]
 struct Clock {
-   limit: u16, // 0..10800
+   limit: u16,    // 0..10800
    increment: u8, // 0..60
 }
-
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -140,7 +139,9 @@ fn read_api_token() -> Result<String, std::io::Error> {
    Ok(line_buf)
 }
 
-fn convert_err(_err: reqwest::Error) -> std::io::Error { unimplemented!() }
+fn convert_err(_err: reqwest::Error) -> std::io::Error {
+   unimplemented!()
+}
 
 pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {
    let engine_interface: EngineInterface = Arc::new(Mutex::new((sender, receiver)));
@@ -167,7 +168,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
       }
    };
 
-   let client = reqwest::Client::new();
+   let client = reqwest::Client::builder().pool_max_idle_per_host(0).build().unwrap();
    let user: User = client
       .get("https://lichess.org/api/account")
       .bearer_auth(&api_token)
@@ -201,14 +202,20 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
    let challenge_ai: Option<u8> = None;
 
    if let Some(level) = challenge_ai {
-      client.post("https://lichess.org/api/challenge/ai").bearer_auth(&api_token).json(&AiChallenge {
-         level,
-         clock: Clock {
-            limit: 900,
-            increment: 0,
-         },
-         variant: "standard".into(),
-      }).send().await.unwrap();
+      client
+         .post("https://lichess.org/api/challenge/ai")
+         .bearer_auth(&api_token)
+         .json(&AiChallenge {
+            level,
+            clock: Clock {
+               limit: 900,
+               increment: 0,
+            },
+            variant: "standard".into(),
+         })
+         .send()
+         .await
+         .unwrap();
    }
 
    let games_in_progress = Arc::new(Mutex::new(FxHashSet::with_hasher(Default::default())));
@@ -223,7 +230,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
             .await
             .unwrap()
             .bytes_stream()
-            .map_err(convert_err)
+            .map_err(convert_err),
       );
       let mut lines = challenge_stream.lines();
       while let Some(line) = lines.next_line().await.unwrap() {
@@ -310,7 +317,7 @@ async fn manage_game(
          .await
          .unwrap()
          .bytes_stream()
-         .map_err(convert_err)
+         .map_err(convert_err),
    );
    let mut us_color = Color::Black;
    let mut initial_game_state = State::from_start();
@@ -360,7 +367,11 @@ async fn manage_game(
             });
             let cur_game_state = initial_game_state.apply_moves_from_uci(&game_state_json.moves);
             if cur_game_state.position.side_to_move == us_color {
-               let last_move: Option<Move> = game_state_json.moves.split_whitespace().last().map(|x| x.parse().unwrap());
+               let last_move: Option<Move> = game_state_json
+                  .moves
+                  .split_whitespace()
+                  .last()
+                  .map(|x| x.parse().unwrap());
                if let Some(m) = last_move {
                   let ei = ei.lock().unwrap();
                   ei.0.send(InterfaceMessage::ApplyMove(m)).unwrap();

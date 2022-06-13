@@ -5,6 +5,7 @@ mod uci;
 
 use std::sync::mpsc;
 use std::thread;
+use std::time::Duration;
 use structopt::StructOpt;
 
 /// A simple chess engine
@@ -41,9 +42,14 @@ async fn main() {
    }
 
    if opt.profiling {
-      let state = chessatk_lib::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();
-      ite_tx.send(chessatk_lib::messages::InterfaceMessage::SetState(state)).unwrap();
-      ite_tx.send(chessatk_lib::messages::InterfaceMessage::GoDepth(5)).unwrap();
+      let state =
+         chessatk_lib::board::State::from_fen("1Bb3BN/R2Pk2r/1Q5B/4q2R/2bN4/4Q1BK/1p6/1bq1R1rb w - - 0 1").unwrap();
+      ite_tx
+         .send(chessatk_lib::messages::InterfaceMessage::SetState(state))
+         .unwrap();
+      ite_tx
+         .send(chessatk_lib::messages::InterfaceMessage::GoTime(Duration::from_secs(30)))
+         .unwrap();
       let _ = eti_rx.recv().unwrap();
       return;
    }

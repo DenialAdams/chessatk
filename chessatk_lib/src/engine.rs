@@ -44,7 +44,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
          }
          InterfaceMessage::ApplyMove(m) => {
             state = state.apply_move(m);
-         },
+         }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
       //board = board.apply_move(best_move.unwrap());

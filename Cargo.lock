@@ -110,6 +110,7 @@ version = "0.1.0"
 dependencies = [
  "log",
  "noisy_float",
+ "parking_lot",
  "rand",
  "rayon",
  "smallvec",

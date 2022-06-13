@@ -7,7 +7,7 @@ use std::time::Duration;
 pub enum InterfaceMessage {
    GoDepth(u64), // Calculate until depth and respond with the best move
    GoTime(Duration),
-   QueryEval, // Query the evaluation of the current game state
+   QueryEval,       // Query the evaluation of the current game state
    ApplyMove(Move), // Incremental state update (for engine optimizations)
    SetState(State), // Full state update
 }

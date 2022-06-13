@@ -1,5 +1,5 @@
 use smallvec::SmallVec;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::str::FromStr;
 
 pub const START_FEN: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -613,6 +613,7 @@ impl State {
       state
    }
 
+   #[must_use]
    pub fn apply_move(&self, a_move: Move) -> State {
       let (new_halfmove_clock, new_prior_positions) = if self.position.squares[a_move.destination] != Square::Empty
          || self.position.squares[a_move.origin] == Square::BlackPawn
@@ -620,7 +621,7 @@ impl State {
       {
          (0, SmallVec::new())
       } else {
-         let mut npp = SmallVec::new();
+         let mut npp = self.prior_positions.clone();
          npp.push(self.position.clone());
          (self.halfmove_clock + 1, npp)
       };
@@ -636,7 +637,9 @@ impl State {
    }
 
    pub fn gen_moves(&self, do_check_checking: bool) -> Vec<Move> {
-      self.position.gen_moves_color(self.position.side_to_move, do_check_checking)
+      self
+         .position
+         .gen_moves_color(self.position.side_to_move, do_check_checking)
    }
 
    pub fn from_fen(fen: &str) -> Result<State, String> {
@@ -655,7 +658,7 @@ impl State {
          return Err(format!("malformed FEN; length of piece placment section can't be larger than 71 or less than 15 and be a valid board, found length of {}", fen_sections[0].len()));
       }
       for ascii_char in fen_sections[0].bytes() {
-         if index == 64 {
+         if index >= 64 {
             return Err("malformed FEN; too many squares on board".into());
          }
          match ascii_char {
@@ -867,11 +870,52 @@ impl State {
       })
    }
 
+   pub fn to_fen(&self) -> String {
+      let mut buf = String::new();
+      let mut acc: u8 = 0;
+      for square in self.position.squares.0.iter() {
+         match square {
+            Square::Empty => buf.push('1'),
+            Square::BlackPawn => buf.push('p'),
+            Square::WhitePawn => buf.push('P'),
+            Square::BlackKnight => buf.push('n'),
+            Square::WhiteKnight => buf.push('N'),
+            Square::BlackBishop => buf.push('b'),
+            Square::WhiteBishop => buf.push('B'),
+            Square::BlackRook => buf.push('r'),
+            Square::WhiteRook => buf.push('R'),
+            Square::BlackQueen => buf.push('q'),
+            Square::WhiteQueen => buf.push('Q'),
+            Square::BlackKing => buf.push('k'),
+            Square::WhiteKing => buf.push('K'),
+         }
+         acc += 1;
+         if acc == 8 {
+            buf.push('/');
+            acc = 0
+         }
+      }
+      buf.push(' ');
+      match self.position.side_to_move {
+         Color::Black => buf.push('b'),
+         Color::White => buf.push('w'),
+      }
+      buf.push(' ');
+      buf.push('-'); // TODO
+      buf.push(' ');
+      buf.push('-'); // TODO
+      buf.push(' ');
+      write!(buf, "{}", self.halfmove_clock).unwrap();
+      buf.push(' ');
+      buf.push('0'); // TODO
+      buf
+   }
+
    pub fn status(&self, moves: &[Move]) -> GameStatus {
       if self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
          return GameStatus::Draw;
       }
-      
+
       if moves.is_empty() && !self.position.in_check(self.position.side_to_move) {
          return GameStatus::Draw;
       }
@@ -888,8 +932,7 @@ impl State {
    }
 }
 
-
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum GameStatus {
    Draw,
    Victory(Color),
@@ -1451,7 +1494,7 @@ mod tests {
       // TODO To be replaced by a more thorough perft
       let mut a = State::from_start();
       assert_eq!(a.gen_moves(true).len(), 20);
-      a.apply_move("e2e4".parse().unwrap());
+      a = a.apply_move("e2e4".parse().unwrap());
       assert_eq!(a.gen_moves(true).len(), 20);
       a = State::from_moves("g2g4 e7e5").unwrap();
       assert_eq!(a.gen_moves(true).len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
@@ -1496,5 +1539,12 @@ mod tests {
    #[test]
    fn square_small() {
       assert_eq!(std::mem::size_of::<Square>(), 1)
+   }
+
+   #[test]
+   fn checkmate_no_moves() {
+      let game = State::from_fen("2b1kr2/4Qp2/8/pP1Np2p/3P4/3BP3/PP3PPP/R3K2R b KQ - 1 19").unwrap();
+      let moves = game.gen_moves(true);
+      assert!(moves.is_empty());
    }
 }
