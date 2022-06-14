@@ -226,7 +226,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          .unwrap();
    }
 
-   let challenge_bot: Option<&'static str> = Some("PWS-bot");
+   let challenge_bot: Option<&'static str> = None;
 
    if let Some(name) = challenge_bot {
       client
@@ -411,7 +411,8 @@ async fn manage_game(
                let eval = {
                   let ei = ei.lock().unwrap();
                   ei.0.send(InterfaceMessage::QueryEval).unwrap();
-                  match ei.1.recv().unwrap() {
+                  let msg = { ei.1.recv().unwrap() };
+                  match msg {
                      EngineMessage::CurrentEval(e) => e,
                      _ => panic!("expected current eval from the engine!"),
                   }
@@ -453,7 +454,8 @@ async fn think_and_move(
       let ei = ei.lock().unwrap();
       ei.0.send(InterfaceMessage::GoTime(remaining_time / 20)).unwrap();
       trace!("Our move! Thinking...");
-      match ei.1.recv().unwrap() {
+      let msg = { ei.1.recv().unwrap() };
+      match msg {
          EngineMessage::BestMove(best_move_opt) => {
             if let Some(best_move) = best_move_opt {
                ei.0.send(InterfaceMessage::ApplyMove(best_move)).unwrap();
