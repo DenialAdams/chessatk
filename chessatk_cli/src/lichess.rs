@@ -68,6 +68,7 @@ struct GameStart {
 #[allow(non_camel_case_types)]
 enum Event {
    challenge(ChallengeOuter),
+   challengeDeclined(ChallengeOuter),
    gameStart(GameStart),
    gameFinish(GameStart),
 }
@@ -107,6 +108,13 @@ struct ChatLine {
 #[derive(Debug, Serialize)]
 struct AiChallenge {
    level: u8, // 1..8
+   clock: Clock,
+   variant: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AcctChallenge {
+   rated: bool,
    clock: Clock,
    variant: String,
 }
@@ -218,6 +226,25 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          .unwrap();
    }
 
+   let challenge_bot: Option<&'static str> = Some("PWS-bot");
+
+   if let Some(name) = challenge_bot {
+      client
+         .post(&format!("https://lichess.org/api/challenge/{}", name))
+         .bearer_auth(&api_token)
+         .json(&AcctChallenge {
+            rated: false,
+            clock: Clock {
+               limit: 600,
+               increment: 0,
+            },
+            variant: "standard".into(),
+         })
+         .send()
+         .await
+         .unwrap();
+   }
+
    let games_in_progress = Arc::new(Mutex::new(FxHashSet::with_hasher(Default::default())));
    // Accept first challenge
    // TODO: we are silently ignoring errors by being flat
@@ -256,6 +283,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
                   if challenge_reject_res.status() != StatusCode::OK {
                      warn!("Failed to reject challenge. Perhaps the challenge was revoked. Proceeding.")
                   }
+                  continue;
                }
                // todo: this is now hard set to 1. 1 engine to multiple games doesn't work due to engine optimizations
                // to fix, need to have 1 engine per game ongoing? seems better
@@ -292,9 +320,8 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
                   manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc).await;
                });
             }
-            Event::gameFinish(_game_outer) => {
-               continue;
-            }
+            Event::gameFinish(_game_outer) => {},
+            Event::challengeDeclined(_) => {},
          }
       }
    }

@@ -87,7 +87,7 @@ impl Square {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum PromotionTarget {
+pub enum PromotionTarget {
    Knight,
    Bishop,
    Rook,
@@ -499,9 +499,9 @@ pub struct State {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Move {
-   origin: u8,
-   destination: u8,
-   promotion: Option<PromotionTarget>,
+   pub origin: u8,
+   pub destination: u8,
+   pub promotion: Option<PromotionTarget>,
 }
 
 impl fmt::Display for Move {

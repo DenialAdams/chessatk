@@ -21,10 +21,14 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
          }
          InterfaceMessage::GoTime(time_budget) => {
             let result = mcts(&mut mcts_state, &time_budget, &state, 0.3);
-            if state.position.side_to_move == Color::Black {
-               // eval is always relative to side to move, but we want eval to be + for white and - for black
-               last_eval = 1.0 - result.1;
+
+            if let Some(res) = result {
+               if state.position.side_to_move == Color::Black {
+                  // eval is always relative to side to move, but we want eval to be + for white and - for black
+                  last_eval = 1.0 - res.1;
+               }
             }
+
             {
                let tree = mcts_state.tree.lock();
                trace!(
@@ -33,10 +37,9 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
                   (1.0 - (tree[mcts_state.root].stats.score / tree[mcts_state.root].stats.simulations as f64)) * 100.0,
                );
             }
-
             //emit_debug_tree(&mcts_state);
 
-            sender.send(EngineMessage::BestMove(result.0)).unwrap();
+            sender.send(EngineMessage::BestMove(result.map(|x| x.0))).unwrap();
          }
          InterfaceMessage::QueryEval => {
             sender.send(EngineMessage::CurrentEval(last_eval)).unwrap();
@@ -54,7 +57,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
 }
 
 struct Node {
-   last_move: Option<Move>,
+   last_move: Move,
    last_player: Color,
    parent: usize,
    children: Vec<usize>,
@@ -63,13 +66,14 @@ struct Node {
 
 #[derive(Clone, Copy)]
 struct NodeStats {
+   unobserved_simulations: u64,
    simulations: u64,
    score: f64,
 }
 
-fn ucb1(exploration_val: f64, node_stats: NodeStats, parent_simulations: u64) -> f64 {
+fn ucb1(exploration_val: f64, node_stats: &NodeStats, parent_stats: &NodeStats) -> f64 {
    let win_rate = node_stats.score / node_stats.simulations as f64;
-   let exploration_score = exploration_val * ((parent_simulations as f64).ln() / node_stats.simulations as f64).sqrt();
+   let exploration_score = exploration_val * (((parent_stats.simulations + parent_stats.unobserved_simulations) as f64).ln() / (node_stats.simulations + node_stats.unobserved_simulations) as f64).sqrt();
    win_rate + exploration_score
 }
 
@@ -92,7 +96,7 @@ impl MctsState {
       let new_root = tree.get(self.root).and_then(|x| {
          x.children
             .iter()
-            .find(|y| *tree[**y].last_move.as_ref().unwrap() == a_move)
+            .find(|y| tree[**y].last_move == a_move)
       });
 
       if let Some(n) = new_root {
@@ -127,17 +131,22 @@ fn mcts(
    time_budget: &Duration,
    state: &State,
    exploration_val: f64,
-) -> (Option<Move>, f64) {
+) -> Option<(Move, f64)> {
    {
       let mut tree = mcts_state.tree.lock();
       if tree.len() == 0 {
          tree.push(Node {
-            last_move: None,
+            last_move: Move {
+               origin: 0,
+               destination: 0,
+               promotion: None,
+            },
             last_player: !state.position.side_to_move,
             parent: 0,
             children: vec![],
             stats: NodeStats {
                simulations: 0,
+               unobserved_simulations: 0,
                score: 0.0,
             },
          });
@@ -151,15 +160,16 @@ fn mcts(
       }
    });
    let tree = mcts_state.tree.lock();
+
    let best_child = tree[mcts_state.root]
       .children
       .iter()
-      .max_by_key(|x| tree[**x].stats.simulations)
-      .unwrap();
-   (
-      tree[*best_child].last_move,
-      tree[*best_child].stats.score / tree[*best_child].stats.simulations as f64,
-   )
+      .max_by_key(|x| tree[**x].stats.simulations);
+
+   best_child.map(|x| (
+      tree[*x].last_move,
+      tree[*x].stats.score / tree[*x].stats.simulations as f64,
+   ))
 }
 
 fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exploration_val: f64) {
@@ -180,8 +190,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
          {
             let mut tree = mcts_state.tree.lock();
             'outer: loop {
-               tree[cur_node].stats.simulations += 1; // simulations are updated early, so other threads are aware
-               // ("WATCH THE UNOBSERVED: A SIMPLE APPROACH TO PARALLELIZING MONTE CARLO TREE SEARCH")
+               tree[cur_node].stats.unobserved_simulations += 1; // ("WATCH THE UNOBSERVED: A SIMPLE APPROACH TO PARALLELIZING MONTE CARLO TREE SEARCH")
                moves = g.gen_moves(true);
                g_status = g.status(&moves);
 
@@ -190,22 +199,24 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                   break;
                }
 
+               tree[cur_node].children.shuffle(&mut rng); // try not to create new nodes in a biased fashion
                for a_move in moves.iter() {
                   if !tree[cur_node]
                      .children
                      .iter()
-                     .any(|x| tree[*x].last_move.as_ref().unwrap() == a_move)
+                     .any(|x| tree[*x].last_move == *a_move)
                   {
                      let new_node_id = tree.len();
                      tree[cur_node].children.push(new_node_id);
                      tree.push(Node {
-                        last_move: Some(*a_move),
+                        last_move: *a_move,
                         last_player: g.position.side_to_move,
                         parent: cur_node,
                         children: vec![],
                         stats: NodeStats {
                            score: 0.0,
-                           simulations: 1,
+                           unobserved_simulations: 1,
+                           simulations: 0,
                         },
                      });
 
@@ -222,9 +233,9 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                cur_node = *tree[cur_node]
                   .children
                   .iter()
-                  .max_by_key(|x| r64(ucb1(exploration_val, tree[**x].stats, tree[cur_node].stats.simulations)))
+                  .max_by_key(|x| r64(ucb1(exploration_val, &tree[**x].stats, &tree[cur_node].stats)))
                   .unwrap();
-               g = g.apply_move(*tree[cur_node].last_move.as_ref().unwrap());
+               g = g.apply_move(tree[cur_node].last_move);
             }
          }
 
@@ -251,6 +262,8 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                }
                GameStatus::Ongoing => unsafe { unreachable_unchecked() },
             }
+            tree[cur_node].stats.simulations += 1;
+            tree[cur_node].stats.unobserved_simulations -= 1;
             if cur_node == mcts_state.root {
                break;
             }
@@ -285,23 +298,14 @@ fn emit_debug_tree(mcts_state: &MctsState) {
 
 fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node]) {
    let node = &tree[i];
-   if node.last_move.is_some() {
-      writeln!(
-         out,
-         "<li><span>{}</span><br><span>score «{}» simulations «{}»</span>",
-         node.last_move.unwrap(),
-         node.stats.score,
-         node.stats.simulations
-      )
-      .unwrap();
-   } else {
-      writeln!(
-         out,
-         "<li><span>score «{}» simulations «{}»</span>",
-         node.stats.score, node.stats.simulations
-      )
-      .unwrap();
-   }
+   writeln!(
+      out,
+      "<li><span>{}</span><br><span>score «{}» simulations «{}»</span>",
+      node.last_move,
+      node.stats.score,
+      node.stats.simulations
+   )
+   .unwrap();
    writeln!(out, "<ul>").unwrap();
    for child in node.children.iter().copied() {
       emit_debug_node(out, child, tree);
