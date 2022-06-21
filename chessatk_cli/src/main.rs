@@ -53,6 +53,7 @@ async fn main() {
          )))
          .unwrap();
       let _ = eti_rx.recv().unwrap();
+
       return;
    }
 

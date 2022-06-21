@@ -1,6 +1,7 @@
 use smallvec::SmallVec;
 use std::fmt::{self, Write};
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
 
 const WHITE: usize = 0;
 const BLACK: usize = 1;
@@ -60,7 +61,6 @@ const fn gen_pawn_attacks() -> [[u64; 64]; 2] {
    }
    array
 }
-
 
 const fn gen_king_attacks() -> [u64; 64] {
    let mut array: [u64; 64] = [0; 64];
@@ -145,7 +145,7 @@ const fn gen_east_rays() -> [u64; 65] {
 
    let mut i = 0;
    while i < 64 {
-      array[i] = 2*((1 << (i | 7)) - (1 << i));
+      array[i] = 2 * ((1 << (i | 7)) - (1 << i));
       i += 1;
    }
 
@@ -295,9 +295,9 @@ pub enum Color {
 impl Color {
    fn as_num(&self) -> usize {
       match self {
-        Color::White => WHITE,
-        Color::Black => BLACK,
-    }
+         Color::White => WHITE,
+         Color::Black => BLACK,
+      }
    }
 }
 
@@ -523,7 +523,9 @@ impl Position {
 
          // If this was a capture, need to yeet prior piece
          if let Some(p) = destination_piece_kind {
-            self.squares.remove_piece(destination_piece_color, p, a_move.destination);
+            self
+               .squares
+               .remove_piece(destination_piece_color, p, a_move.destination);
          }
 
          if let Some(promotion_target) = a_move.promotion {
@@ -547,9 +549,6 @@ impl Position {
             self.squares.add_piece(piece_color, piece_kind, a_move.destination);
          }
       }
-
-      println!("-- {}", a_move);
-      //println!("{}", bitboard_to_string(self.squares.occupied));
 
       // If king moved, do castling rook movement (potentially) and revoke castling rights (always)
       // If pawn moved, do en-passant checking
@@ -671,8 +670,10 @@ impl Position {
          return true;
       }
 
-      let bishops_and_queens = self.squares.pieces[attacker.as_num()][BISHOP] | self.squares.pieces[attacker.as_num()][QUEEN];
-      let rooks_and_queens = self.squares.pieces[attacker.as_num()][ROOK] | self.squares.pieces[attacker.as_num()][QUEEN];
+      let bishops_and_queens =
+         self.squares.pieces[attacker.as_num()][BISHOP] | self.squares.pieces[attacker.as_num()][QUEEN];
+      let rooks_and_queens =
+         self.squares.pieces[attacker.as_num()][ROOK] | self.squares.pieces[attacker.as_num()][QUEEN];
 
       if (bishop_attacks(self, square) & bishops_and_queens) > 0 {
          return true;
@@ -773,7 +774,8 @@ fn index_to_algebraic_string(index: u8) -> String {
          7 => "h",
          _ => unreachable!(),
       }
-   ).unwrap();
+   )
+   .unwrap();
    write!(f, "{}", (index / 8) + 1).unwrap();
    f
 }
@@ -832,10 +834,11 @@ impl State {
 
    #[must_use]
    pub fn apply_move(&self, a_move: Move) -> State {
-      let is_capture = (self.position.squares.occupied & (1 << a_move.destination)) != 0; 
-      let is_pawn_move = ((self.position.squares.pieces[WHITE][PAWN] | self.position.squares.pieces[BLACK][PAWN]) & (1 << a_move.origin)) != 0;
-      let (new_halfmove_clock, new_prior_positions) = if is_capture | is_pawn_move
-      {
+      let is_capture = (self.position.squares.occupied & (1 << a_move.destination)) != 0;
+      let is_pawn_move = ((self.position.squares.pieces[WHITE][PAWN] | self.position.squares.pieces[BLACK][PAWN])
+         & (1 << a_move.origin))
+         != 0;
+      let (new_halfmove_clock, new_prior_positions) = if is_capture | is_pawn_move {
          (0, SmallVec::new())
       } else {
          let mut npp = self.prior_positions.clone();
@@ -1115,7 +1118,8 @@ impl State {
             buf.push('/');
             acc = 0
          }
-      } */ // TODO
+      } */
+      // TODO
       buf.push(' ');
       match self.position.side_to_move {
          Color::Black => buf.push('b'),
@@ -1133,23 +1137,24 @@ impl State {
    }
 
    pub fn status(&self, moves: &[Move]) -> GameStatus {
+      // Threefold repetition
       if self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
          return GameStatus::Draw;
       }
 
-      if moves.is_empty() && !self.position.in_check(self.position.side_to_move) {
-         return GameStatus::Draw;
-      }
-
-      if !moves.is_empty() && self.halfmove_clock >= 100 {
-         return GameStatus::Draw;
-      }
-
       if moves.is_empty() {
-         return GameStatus::Victory(!self.position.side_to_move);
+         if !self.position.in_check(self.position.side_to_move) {
+            // I have no moves, and I'm not in check - stalemate
+            GameStatus::Draw
+         } else {
+            // I have no moves, and I'm in check - I lose
+            GameStatus::Victory(!self.position.side_to_move)
+         }
+      } else if self.halfmove_clock >= 100 {
+         GameStatus::Draw
+      } else {
+         GameStatus::Ongoing
       }
-
-      GameStatus::Ongoing
    }
 }
 
@@ -1503,7 +1508,8 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
    if cur_position.white_kingside_castle {
       let path_bb: u64 = (1 << 5) | (1 << 6);
       let squares_occupied = (path_bb & cur_position.squares.occupied) > 0;
-      let squares_attacked = cur_position.square_is_attacked(Color::White, 5) | cur_position.square_is_attacked(Color::White, 6);
+      let squares_attacked =
+         cur_position.square_is_attacked(Color::White, 5) | cur_position.square_is_attacked(Color::White, 6);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::White) {
          results.push(Move {
@@ -1517,7 +1523,8 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
    if cur_position.white_queenside_castle {
       let path_bb: u64 = (1 << 3) | (1 << 2) | (1 << 1);
       let squares_occupied = (path_bb & cur_position.squares.occupied) > 0;
-      let squares_attacked = cur_position.square_is_attacked(Color::White, 3) | cur_position.square_is_attacked(Color::White, 2);
+      let squares_attacked =
+         cur_position.square_is_attacked(Color::White, 3) | cur_position.square_is_attacked(Color::White, 2);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::White) {
          results.push(Move {
@@ -1531,11 +1538,12 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
 
 fn black_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
    king_movegen(cur_position, BLACK, results);
-   
+
    if cur_position.black_kingside_castle {
       let path_bb: u64 = (1 << 61) | (1 << 62);
       let squares_occupied = (path_bb & cur_position.squares.occupied) > 0;
-      let squares_attacked = cur_position.square_is_attacked(Color::Black, 61) | cur_position.square_is_attacked(Color::Black, 62);
+      let squares_attacked =
+         cur_position.square_is_attacked(Color::Black, 61) | cur_position.square_is_attacked(Color::Black, 62);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::Black) {
          results.push(Move {
@@ -1549,7 +1557,8 @@ fn black_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
    if cur_position.black_queenside_castle {
       let path_bb: u64 = (1 << 57) | (1 << 58) | (1 << 59);
       let squares_occupied = (path_bb & cur_position.squares.occupied) > 0;
-      let squares_attacked = cur_position.square_is_attacked(Color::Black, 58) | cur_position.square_is_attacked(Color::Black, 59);
+      let squares_attacked =
+         cur_position.square_is_attacked(Color::Black, 58) | cur_position.square_is_attacked(Color::Black, 59);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::Black) {
          results.push(Move {
@@ -1628,17 +1637,17 @@ fn bitboard_to_string(bb: u64) -> String {
 }
 
 fn bishop_attacks(cur_position: &Position, square: usize) -> u64 {
-   positive_ray_attack(NORTH_WEST, square, cur_position.squares.occupied) |
-   positive_ray_attack(NORTH_EAST, square, cur_position.squares.occupied) |
-   negative_ray_attack(SOUTH_WEST, square, cur_position.squares.occupied) |
-   negative_ray_attack(SOUTH_EAST, square, cur_position.squares.occupied)
+   positive_ray_attack(NORTH_WEST, square, cur_position.squares.occupied)
+      | positive_ray_attack(NORTH_EAST, square, cur_position.squares.occupied)
+      | negative_ray_attack(SOUTH_WEST, square, cur_position.squares.occupied)
+      | negative_ray_attack(SOUTH_EAST, square, cur_position.squares.occupied)
 }
 
 fn rook_attacks(cur_position: &Position, square: usize) -> u64 {
-   positive_ray_attack(NORTH, square, cur_position.squares.occupied) |
-   positive_ray_attack(EAST, square, cur_position.squares.occupied) |
-   negative_ray_attack(SOUTH, square, cur_position.squares.occupied) |
-   negative_ray_attack(WEST, square, cur_position.squares.occupied)
+   positive_ray_attack(NORTH, square, cur_position.squares.occupied)
+      | positive_ray_attack(EAST, square, cur_position.squares.occupied)
+      | negative_ray_attack(SOUTH, square, cur_position.squares.occupied)
+      | negative_ray_attack(WEST, square, cur_position.squares.occupied)
 }
 
 fn bishop_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
@@ -1665,19 +1674,13 @@ fn queen_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>)
    let mut queens = cur_position.squares.pieces[color][QUEEN];
    while queens > 0 {
       let origin = pop_lsb(&mut queens);
-      let mut moves = bishop_attacks(cur_position, origin as usize) & rook_attacks(cur_position, origin as usize);
+      let mut moves = bishop_attacks(cur_position, origin as usize) | rook_attacks(cur_position, origin as usize);
       moves &= !cur_position.squares.all_pieces[color];
       add_moves(cur_position, color, origin as u8, moves, results);
    }
 }
 
-fn add_moves(
-   cur_position: &Position,
-   color: usize,
-   origin: u8,
-   mut moves: u64,
-   results: &mut Vec<Move>,
-) {
+fn add_moves(cur_position: &Position, color: usize, origin: u8, mut moves: u64, results: &mut Vec<Move>) {
    moves &= !(cur_position.squares.pieces[color ^ 1][KING]);
 
    while moves > 0 {
@@ -1835,5 +1838,21 @@ mod tests {
       let game = State::from_fen("2b1kr2/4Qp2/8/pP1Np2p/3P4/3BP3/PP3PPP/R3K2R b KQ - 1 19").unwrap();
       let moves = game.gen_moves(true);
       assert!(moves.is_empty());
+   }
+
+   #[test]
+   fn find_the_checkmates() {
+      let game = State::from_fen("rnbqkbnr/ppppp3/5ppp/7Q/3PP3/8/PPP2PPP/RNB1KBNR w KQkq - 0 4").unwrap();
+      let moves = game.gen_moves(true);
+
+      let start_square = algebraic_to_index("h5").unwrap();
+      let end_square = algebraic_to_index("g6").unwrap();
+      let a_move = Move {
+         origin: start_square,
+         destination: end_square,
+         promotion: None,
+      };
+
+      assert!(moves.contains(&a_move));
    }
 }

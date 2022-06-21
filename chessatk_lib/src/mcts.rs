@@ -37,7 +37,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
                   (1.0 - (tree[mcts_state.root].stats.score / tree[mcts_state.root].stats.simulations as f64)) * 100.0,
                );
             }
-            //emit_debug_tree(&mcts_state);
+            emit_debug_tree(&mcts_state);
 
             sender.send(EngineMessage::BestMove(result.map(|x| x.0))).unwrap();
          }
@@ -64,7 +64,7 @@ struct Node {
    stats: NodeStats,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct NodeStats {
    unobserved_simulations: u64,
    simulations: u64,
@@ -72,7 +72,8 @@ struct NodeStats {
 }
 
 fn ucb1(exploration_val: f64, node_stats: &NodeStats, parent_stats: &NodeStats) -> f64 {
-   let win_rate = node_stats.score / node_stats.simulations as f64;
+   // TODO: is adding unobserved simulations here really right? But otherwise we have to decide what to do if we have 0 simulations...
+   let win_rate = node_stats.score / (node_stats.simulations + node_stats.unobserved_simulations) as f64;
    let exploration_score = exploration_val
       * (((parent_stats.simulations + parent_stats.unobserved_simulations) as f64).ln()
          / (node_stats.simulations + node_stats.unobserved_simulations) as f64)
@@ -290,12 +291,15 @@ fn emit_debug_tree(mcts_state: &MctsState) {
    writeln!(out, "<ul class=\"tree\">").unwrap();
 
    let tree = mcts_state.tree.lock();
-   emit_debug_node(&mut out, mcts_state.root, &tree);
+   emit_debug_node(&mut out, mcts_state.root, &tree, 0);
 
    writeln!(out, "</body>\n</html>").unwrap();
 }
 
-fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node]) {
+fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node], depth: usize) {
+   if depth > 2 {
+      return;
+   }
    let node = &tree[i];
    writeln!(
       out,
@@ -304,8 +308,12 @@ fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node]) {
    )
    .unwrap();
    writeln!(out, "<ul>").unwrap();
-   for child in node.children.iter().copied() {
-      emit_debug_node(out, child, tree);
+
+   let mut sorted = node.children.clone();
+   sorted.sort_by_key(|x| std::cmp::Reverse(tree[*x].stats.simulations));
+   for child in sorted.into_iter() {
+      emit_debug_node(out, child, tree, depth + 1);
    }
+
    writeln!(out, "</ul></li>").unwrap();
 }
