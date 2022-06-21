@@ -72,8 +72,11 @@ struct NodeStats {
 }
 
 fn ucb1(exploration_val: f64, node_stats: &NodeStats, parent_stats: &NodeStats) -> f64 {
-   // TODO: is adding unobserved simulations here really right? But otherwise we have to decide what to do if we have 0 simulations...
-   let win_rate = node_stats.score / (node_stats.simulations + node_stats.unobserved_simulations) as f64;
+   let win_rate = if node_stats.simulations == 0 {
+      0.5
+   } else {
+      node_stats.score / node_stats.simulations as f64
+   };
    let exploration_score = exploration_val
       * (((parent_stats.simulations + parent_stats.unobserved_simulations) as f64).ln()
          / (node_stats.simulations + node_stats.unobserved_simulations) as f64)
