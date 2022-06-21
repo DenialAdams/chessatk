@@ -37,7 +37,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
                   (1.0 - (tree[mcts_state.root].stats.score / tree[mcts_state.root].stats.simulations as f64)) * 100.0,
                );
             }
-            emit_debug_tree(&mcts_state);
+            //emit_debug_tree(&mcts_state);
 
             sender.send(EngineMessage::BestMove(result.map(|x| x.0))).unwrap();
          }
