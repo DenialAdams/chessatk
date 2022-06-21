@@ -270,7 +270,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          match event {
             Event::challenge(challenge_outer) => {
                let challenge_id = challenge_outer.challenge.id;
-               if challenge_outer.challenge.rated
+               if (challenge_outer.challenge.rated && challenge_outer.challenge.variant.key != "standard")
                   || (challenge_outer.challenge.variant.key != "standard"
                      && challenge_outer.challenge.variant.key != "fromPosition")
                {
