@@ -43,7 +43,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
             state = new_state;
          }
          InterfaceMessage::ApplyMove(m) => {
-            state = state.apply_move(m);
+            state.apply_move(m);
          }
       }
       //eprintln!("{} -> {} @ {}. {}", best_move.unwrap(), eval, target_depth, board.fullmove_number);
@@ -71,7 +71,8 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let scores: Vec<_> = moves
       .into_par_iter()
       .map(|a_move| {
-         let new_state = state.apply_move(a_move);
+         let mut new_state = state.clone();
+         new_state.apply_move(a_move);
          let mut ne = 0;
          let mut ng = 0;
          let score = -nega_max(
@@ -144,10 +145,13 @@ fn nega_max(
       return 0.0;
    }
    for a_move in moves {
+      let mut state = state.clone();
+      state.apply_move(a_move);
+
       let score = -nega_max(
          depth - 1,
          dist_from_root + 1,
-         state.apply_move(a_move),
+         state,
          -beta,
          -alpha,
          nodes_expanded,

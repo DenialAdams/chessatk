@@ -815,7 +815,7 @@ impl State {
       let mut state = State::from_start();
       for a_str_move in moves.split_whitespace() {
          let a_move: Move = a_str_move.parse()?;
-         state = state.apply_move(a_move);
+         state.apply_move(a_move);
       }
       Ok(state)
    }
@@ -827,33 +827,26 @@ impl State {
    pub fn apply_moves_from_uci(&self, moves: &str) -> State {
       let mut state = self.clone();
       for a_move in moves.split_whitespace() {
-         state = state.apply_move(a_move.parse().unwrap());
+         state.apply_move(a_move.parse().unwrap());
       }
       state
    }
 
-   #[must_use]
-   pub fn apply_move(&self, a_move: Move) -> State {
+   pub fn apply_move(&mut self, a_move: Move) {
       let is_capture = (self.position.squares.occupied & (1 << a_move.destination)) != 0;
       let is_pawn_move = ((self.position.squares.pieces[WHITE][PAWN] | self.position.squares.pieces[BLACK][PAWN])
          & (1 << a_move.origin))
          != 0;
-      let (new_halfmove_clock, new_prior_positions) = if is_capture | is_pawn_move {
-         (0, SmallVec::new())
+      
+      if is_capture | is_pawn_move {
+         self.prior_positions.clear();
+         self.halfmove_clock = 0;
       } else {
-         let mut npp = self.prior_positions.clone();
-         npp.push(self.position.clone());
-         (self.halfmove_clock + 1, npp)
+         self.prior_positions.push(self.position.clone());
+         self.halfmove_clock += 1;
       };
 
-      let mut new_position = self.position.clone();
-      new_position.apply_move(a_move);
-
-      State {
-         halfmove_clock: new_halfmove_clock,
-         position: new_position,
-         prior_positions: new_prior_positions,
-      }
+      self.position.apply_move(a_move);
    }
 
    pub fn gen_moves(&self, do_check_checking: bool) -> Vec<Move> {
@@ -1782,9 +1775,9 @@ mod tests {
    fn movegen_test() {
       let mut a = State::from_start();
       assert_eq!(a.gen_moves(true).len(), 20);
-      a = a.apply_move("e2e4".parse().unwrap());
+      a.apply_move("e2e4".parse().unwrap());
       assert_eq!(a.gen_moves(true).len(), 20);
-      a = State::from_moves("g2g4 e7e5").unwrap();
+      State::from_moves("g2g4 e7e5").unwrap();
       assert_eq!(a.gen_moves(true).len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
    }
 
@@ -1792,7 +1785,7 @@ mod tests {
    fn king_movegen_test() {
       let mut a = State::from_fen("8/5k2/8/8/2K5/8/8/8 w - - 0 1").unwrap();
       assert_eq!(a.gen_moves(true).len(), 8);
-      a = a.apply_move("c4c5".parse().unwrap());
+      a.apply_move("c4c5".parse().unwrap());
       assert_eq!(a.gen_moves(true).len(), 8);
    }
 

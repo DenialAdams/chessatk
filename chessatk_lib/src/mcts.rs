@@ -50,7 +50,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
          }
          InterfaceMessage::ApplyMove(m) => {
             mcts_state.move_root_down(m);
-            state = state.apply_move(m);
+            state.apply_move(m);
          }
       }
    }
@@ -222,7 +222,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
 
                      // select the newly created node
                      cur_node = new_node_id;
-                     g = g.apply_move(*a_move);
+                     g.apply_move(*a_move);
                      moves = g.gen_moves(true);
                      g_status = g.status(&moves);
                      break 'outer;
@@ -235,14 +235,14 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                   .iter()
                   .max_by_key(|x| r64(ucb1(exploration_val, &tree[**x].stats, &tree[cur_node].stats)))
                   .unwrap();
-               g = g.apply_move(tree[cur_node].last_move);
+               g.apply_move(tree[cur_node].last_move);
             }
          }
 
          // simulate (random rollout)
          while g_status == GameStatus::Ongoing {
             let rand_move = *moves.choose(&mut rng).unwrap();
-            g = g.apply_move(rand_move);
+            g.apply_move(rand_move);
             moves = g.gen_moves(true);
             g_status = g.status(&moves);
          }
