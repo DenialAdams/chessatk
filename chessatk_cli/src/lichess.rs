@@ -320,8 +320,8 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
                   manage_game(cc, game_outer.game.id, atc, uc, uidc, eic, gipc).await;
                });
             }
-            Event::gameFinish(_game_outer) => {},
-            Event::challengeDeclined(_) => {},
+            Event::gameFinish(_game_outer) => {}
+            Event::challengeDeclined(_) => {}
          }
       }
    }

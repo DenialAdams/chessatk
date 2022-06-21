@@ -48,7 +48,9 @@ async fn main() {
          .send(chessatk_lib::messages::InterfaceMessage::SetState(state))
          .unwrap();
       ite_tx
-         .send(chessatk_lib::messages::InterfaceMessage::GoTime(Duration::from_secs(30)))
+         .send(chessatk_lib::messages::InterfaceMessage::GoTime(Duration::from_secs(
+            30,
+         )))
          .unwrap();
       let _ = eti_rx.recv().unwrap();
       return;

@@ -73,7 +73,10 @@ struct NodeStats {
 
 fn ucb1(exploration_val: f64, node_stats: &NodeStats, parent_stats: &NodeStats) -> f64 {
    let win_rate = node_stats.score / node_stats.simulations as f64;
-   let exploration_score = exploration_val * (((parent_stats.simulations + parent_stats.unobserved_simulations) as f64).ln() / (node_stats.simulations + node_stats.unobserved_simulations) as f64).sqrt();
+   let exploration_score = exploration_val
+      * (((parent_stats.simulations + parent_stats.unobserved_simulations) as f64).ln()
+         / (node_stats.simulations + node_stats.unobserved_simulations) as f64)
+         .sqrt();
    win_rate + exploration_score
 }
 
@@ -93,11 +96,9 @@ impl MctsState {
    fn move_root_down(&mut self, a_move: Move) {
       let mut tree = self.tree.lock();
 
-      let new_root = tree.get(self.root).and_then(|x| {
-         x.children
-            .iter()
-            .find(|y| tree[**y].last_move == a_move)
-      });
+      let new_root = tree
+         .get(self.root)
+         .and_then(|x| x.children.iter().find(|y| tree[**y].last_move == a_move));
 
       if let Some(n) = new_root {
          self.root = *n;
@@ -166,10 +167,12 @@ fn mcts(
       .iter()
       .max_by_key(|x| tree[**x].stats.simulations);
 
-   best_child.map(|x| (
-      tree[*x].last_move,
-      tree[*x].stats.score / tree[*x].stats.simulations as f64,
-   ))
+   best_child.map(|x| {
+      (
+         tree[*x].last_move,
+         tree[*x].stats.score / tree[*x].stats.simulations as f64,
+      )
+   })
 }
 
 fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exploration_val: f64) {
@@ -201,11 +204,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
 
                tree[cur_node].children.shuffle(&mut rng); // try not to create new nodes in a biased fashion
                for a_move in moves.iter() {
-                  if !tree[cur_node]
-                     .children
-                     .iter()
-                     .any(|x| tree[*x].last_move == *a_move)
-                  {
+                  if !tree[cur_node].children.iter().any(|x| tree[*x].last_move == *a_move) {
                      let new_node_id = tree.len();
                      tree[cur_node].children.push(new_node_id);
                      tree.push(Node {
@@ -301,9 +300,7 @@ fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node]) {
    writeln!(
       out,
       "<li><span>{}</span><br><span>score «{}» simulations «{}»</span>",
-      node.last_move,
-      node.stats.score,
-      node.stats.simulations
+      node.last_move, node.stats.score, node.stats.simulations
    )
    .unwrap();
    writeln!(out, "<ul>").unwrap();

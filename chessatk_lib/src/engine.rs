@@ -170,7 +170,6 @@ use crate::board::Piece;
 
 fn mat_val(piece: Piece) -> f64 {
    match piece {
-      Piece::Empty => 0.0,
       Piece::Pawn => 1.0,
       Piece::Knight => 3.0,
       Piece::Bishop => 3.0,
@@ -185,24 +184,26 @@ fn evaluate(position: &Position, side_to_move: Color) -> f64 {
    let mut black_mat_score = 0.0;
    let mut white_dist_score = 0.0;
    let mut black_dist_score = 0.0;
-   for (i, square) in position.squares.0.iter().enumerate() {
-      if square.color() == Some(Color::White) {
-         white_mat_score += mat_val(square.piece());
 
-         if square.piece() != Piece::King {
+   /* //TODO bitboards
+   for (i, square) in position.squares.legacy.iter().enumerate() {
+      if square.color() == Some(Color::White) {
+         white_mat_score += square.piece().map(mat_val).unwrap_or(0.0);
+
+         if square.piece() != Some(Piece::King) {
             let row = i / 8;
             let dist = 7 - row;
             white_dist_score += dist as f64;
          }
       } else if square.color() == Some(Color::Black) {
-         black_mat_score += mat_val(square.piece());
+         black_mat_score += square.piece().map(mat_val).unwrap_or(0.0);
 
-         if square.piece() != Piece::King {
+         if square.piece() != Some(Piece::King) {
             let row = i / 8;
             black_dist_score += row as f64;
          }
       }
-   }
+   } */
 
    let mat_score = white_mat_score as f64 - black_mat_score as f64;
    let dist_score = white_dist_score - black_dist_score;
