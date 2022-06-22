@@ -59,7 +59,8 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let search_time_start = Instant::now();
    let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
-   let moves = state.gen_moves();
+   //let moves = state.gen_moves();
+   let moves: Vec<Move> = todo!();
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
    if moves.is_empty() && !state.position.in_check(state.position.side_to_move) {
@@ -133,7 +134,8 @@ fn nega_max(
       return evaluate(&state.position, state.position.side_to_move);
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
-   let moves = state.gen_moves();
+   let moves: Vec<Move> = todo!();
+   //let moves = state.gen_moves();
    //moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
@@ -211,8 +213,9 @@ fn evaluate(position: &Position, side_to_move: Color) -> f64 {
 
    let mat_score = white_mat_score as f64 - black_mat_score as f64;
    let dist_score = white_dist_score - black_dist_score;
-   let mobility_score = position.gen_moves_color(Color::White).len() as f64
-      - position.gen_moves_color(Color::Black).len() as f64;
+   //let mobility_score = position.gen_moves_color(Color::White).len() as f64
+   //   - position.gen_moves_color(Color::Black).len() as f64;
+   let mobility_score: f64 = todo!();
    let final_score = mat_score * 0.9 + mobility_score * 0.06 + dist_score * 0.04;
 
    if side_to_move == Color::White {

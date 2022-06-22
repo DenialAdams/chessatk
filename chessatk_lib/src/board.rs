@@ -626,28 +626,25 @@ impl Position {
       self.side_to_move = !self.side_to_move;
    }
 
-   pub fn gen_moves_color(&self, color: Color) -> Vec<Move> {
-      let mut results = Vec::with_capacity(128);
+   pub fn gen_moves_color(&self, color: Color, results: &mut Vec<Move>) {
       match color {
          Color::White => {
-            white_pawn_movegen(self, &mut results);
-            white_king_movegen(self, &mut results);
-            knight_movegen(self, WHITE, &mut results);
-            bishop_movegen(self, WHITE, &mut results);
-            rook_movegen(self, WHITE, &mut results);
-            queen_movegen(self, WHITE, &mut results);
+            white_pawn_movegen(self, results);
+            white_king_movegen(self, results);
+            knight_movegen(self, WHITE, results);
+            bishop_movegen(self, WHITE, results);
+            rook_movegen(self, WHITE, results);
+            queen_movegen(self, WHITE, results);
          }
          Color::Black => {
-            black_pawn_movegen(self, &mut results);
-            black_king_movegen(self, &mut results);
-            knight_movegen(self, BLACK, &mut results);
-            bishop_movegen(self, BLACK, &mut results);
-            rook_movegen(self, BLACK, &mut results);
-            queen_movegen(self, BLACK, &mut results);
+            black_pawn_movegen(self, results);
+            black_king_movegen(self, results);
+            knight_movegen(self, BLACK, results);
+            bishop_movegen(self, BLACK, results);
+            rook_movegen(self, BLACK, results);
+            queen_movegen(self, BLACK, results);
          }
       }
-
-      results
    }
 
    pub fn in_check(&self, color: Color) -> bool {
@@ -849,10 +846,11 @@ impl State {
       self.position.apply_move(a_move);
    }
 
-   pub fn gen_moves(&self) -> Vec<Move> {
+   pub fn gen_moves(&self, move_buf: &mut Vec<Move>) {
+      move_buf.clear();
       self
          .position
-         .gen_moves_color(self.position.side_to_move)
+         .gen_moves_color(self.position.side_to_move, move_buf)
    }
 
    pub fn from_fen(fen: &str) -> Result<State, String> {
@@ -1783,20 +1781,27 @@ mod tests {
 
    #[test]
    fn movegen_test() {
+      let mut moves: Vec<Move> = Vec::new();
       let mut a = State::from_start();
-      assert_eq!(a.gen_moves().len(), 20);
+      a.gen_moves(&mut moves);
+      assert_eq!(moves.len(), 20);
       a.apply_move("e2e4".parse().unwrap());
-      assert_eq!(a.gen_moves().len(), 20);
+      a.gen_moves(&mut moves);
+      assert_eq!(moves.len(), 20);
       State::from_moves("g2g4 e7e5").unwrap();
-      assert_eq!(a.gen_moves().len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
+      a.gen_moves(&mut moves);
+      assert_eq!(moves.len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
    }
 
    #[test]
    fn king_movegen_test() {
+      let mut moves: Vec<Move> = Vec::new();
       let mut a = State::from_fen("8/5k2/8/8/2K5/8/8/8 w - - 0 1").unwrap();
-      assert_eq!(a.gen_moves().len(), 8);
+      a.gen_moves(&mut moves);
+      assert_eq!(moves.len(), 8);
       a.apply_move("c4c5".parse().unwrap());
-      assert_eq!(a.gen_moves().len(), 8);
+      a.gen_moves(&mut moves);
+      assert_eq!(moves.len(), 8);
    }
 
    #[test]
@@ -1839,14 +1844,16 @@ mod tests {
    #[test]
    fn checkmate_no_moves() {
       let game = State::from_fen("2b1kr2/4Qp2/8/pP1Np2p/3P4/3BP3/PP3PPP/R3K2R b KQ - 1 19").unwrap();
-      let moves = game.gen_moves();
+      let mut moves = Vec::new();
+      game.gen_moves(&mut moves);
       assert!(moves.is_empty());
    }
 
    #[test]
    fn find_the_checkmates() {
+      let mut moves = Vec::new();
       let game = State::from_fen("rnbqkbnr/ppppp3/5ppp/7Q/3PP3/8/PPP2PPP/RNB1KBNR w KQkq - 0 4").unwrap();
-      let moves = game.gen_moves();
+      game.gen_moves(&mut moves);
 
       let start_square = algebraic_to_index("h5").unwrap();
       let end_square = algebraic_to_index("g6").unwrap();
