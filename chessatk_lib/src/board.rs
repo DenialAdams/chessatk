@@ -363,15 +363,40 @@ impl Square {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PromotionTarget {
+   None,
    Knight,
    Bishop,
    Rook,
    Queen,
 }
 
+impl PromotionTarget {
+   fn as_num(&self) -> u16 {
+      match self {
+        PromotionTarget::None => 0,
+        PromotionTarget::Knight => 1,
+        PromotionTarget::Bishop => 2,
+        PromotionTarget::Rook => 3,
+        PromotionTarget::Queen => 4,
+      }
+   }
+
+   fn from_num(num: u16) -> PromotionTarget {
+      match num {
+         0 => PromotionTarget::None,
+         1 => PromotionTarget::Knight,
+         2 => PromotionTarget::Bishop,
+         3 => PromotionTarget::Rook,
+         4 => PromotionTarget::Queen,
+         _ => unsafe { unreachable_unchecked() },
+      }
+   }
+}
+
 impl fmt::Display for PromotionTarget {
    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
       let display = match self {
+         PromotionTarget::None => "",
          PromotionTarget::Knight => "n",
          PromotionTarget::Bishop => "b",
          PromotionTarget::Rook => "r",
@@ -536,25 +561,22 @@ impl Position {
                .remove_piece(destination_piece_color, p, a_move.destination);
          }
 
-         if let Some(promotion_target) = a_move.promotion {
-            // Handle promotion
-            match promotion_target {
-               PromotionTarget::Knight => {
-                  self.squares.add_piece(piece_color, KNIGHT, a_move.destination);
-               }
-               PromotionTarget::Bishop => {
-                  self.squares.add_piece(piece_color, BISHOP, a_move.destination);
-               }
-               PromotionTarget::Rook => {
-                  self.squares.add_piece(piece_color, ROOK, a_move.destination);
-               }
-               PromotionTarget::Queen => {
-                  self.squares.add_piece(piece_color, QUEEN, a_move.destination);
-               }
+         match a_move.promotion {
+            PromotionTarget::Knight => {
+               self.squares.add_piece(piece_color, KNIGHT, a_move.destination);
             }
-         } else {
-            // Normal case
-            self.squares.add_piece(piece_color, piece_kind, a_move.destination);
+            PromotionTarget::Bishop => {
+               self.squares.add_piece(piece_color, BISHOP, a_move.destination);
+            }
+            PromotionTarget::Rook => {
+               self.squares.add_piece(piece_color, ROOK, a_move.destination);
+            }
+            PromotionTarget::Queen => {
+               self.squares.add_piece(piece_color, QUEEN, a_move.destination);
+            }
+            PromotionTarget::None => {
+               self.squares.add_piece(piece_color, piece_kind, a_move.destination);
+            }
          }
       }
 
@@ -626,7 +648,7 @@ impl Position {
       self.side_to_move = !self.side_to_move;
    }
 
-   pub fn gen_moves_color(&self, color: Color, results: &mut Vec<Move>) {
+   pub fn gen_moves_color(&self, color: Color, results: &mut Vec<CompressedMove>) {
       match color {
          Color::White => {
             white_pawn_movegen(self, results);
@@ -692,19 +714,39 @@ pub struct State {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct CompressedMove(u16);
+
+impl CompressedMove {
+   pub fn extract(&self) -> Move {
+      let promotion = PromotionTarget::from_num(self.0 & 0b111);
+      let destination = ((self.0 >> 3) & 0b11_1111) as u8;
+      let origin = ((self.0 >> 9) & 0b11_1111) as u8;
+      Move { origin, destination, promotion }
+   }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Move {
    pub origin: u8,
    pub destination: u8,
-   pub promotion: Option<PromotionTarget>,
+   pub promotion: PromotionTarget
+}
+
+impl Move {
+   pub fn compress(&self) -> CompressedMove {
+      debug_assert!(self.origin.count_ones() <= 6);
+      debug_assert!(self.destination.count_ones() <= 6);
+      let promotion = self.promotion.as_num();
+      debug_assert!(promotion.count_ones() <= 3);
+      CompressedMove((self.origin as u16) << 9 | (self.destination as u16) << 3 | promotion)
+   }
 }
 
 impl fmt::Display for Move {
    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
       index_to_algebraic(self.origin, f)?;
       index_to_algebraic(self.destination, f)?;
-      if let Some(promotion) = self.promotion {
-         write!(f, "{}", promotion)?;
-      }
+      write!(f, "{}", self.promotion)?;
       Ok(())
    }
 }
@@ -722,12 +764,7 @@ impl FromStr for Move {
       }
       let origin_square = &s[..2];
       let dest_square = &s[2..4];
-      let promotion_target = s.get(4..5).map(str::parse::<PromotionTarget>);
-      let promotion_target = if let Some(result) = promotion_target {
-         Some(result?)
-      } else {
-         None
-      };
+      let promotion_target = s.get(4..5).map(str::parse::<PromotionTarget>).transpose()?.unwrap_or(PromotionTarget::None);
       Ok(Move {
          origin: algebraic_to_index(origin_square)?,
          destination: algebraic_to_index(dest_square)?,
@@ -846,7 +883,7 @@ impl State {
       self.position.apply_move(a_move);
    }
 
-   pub fn gen_moves(&self, move_buf: &mut Vec<Move>) {
+   pub fn gen_moves(&self, move_buf: &mut Vec<CompressedMove>) {
       move_buf.clear();
       self
          .position
@@ -1127,7 +1164,7 @@ impl State {
       buf
    }
 
-   pub fn status(&self, moves: &[Move]) -> GameStatus {
+   pub fn status(&self, moves: &[CompressedMove]) -> GameStatus {
       if moves.is_empty() {
          if !self.position.in_check(self.position.side_to_move) {
             // I have no moves, and I'm not in check - stalemate
@@ -1158,7 +1195,7 @@ fn pop_lsb(board: &mut u64) -> u32 {
    lsb_index
 }
 
-fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
+fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>) {
    // normal movement
    {
       let mut moved_pawns = cur_position.squares.pieces[WHITE][PAWN] << 8;
@@ -1172,7 +1209,7 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 8) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
 
@@ -1181,22 +1218,22 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, WHITE, results);
       }
    }
@@ -1211,7 +1248,7 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 16) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
    }
@@ -1231,7 +1268,7 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
 
@@ -1240,22 +1277,22 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, WHITE, results);
       }
 
@@ -1264,7 +1301,7 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 7) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
    }
@@ -1284,7 +1321,7 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
 
@@ -1293,22 +1330,22 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, WHITE, results);
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, WHITE, results);
       }
 
@@ -1317,13 +1354,13 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to - 9) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
    }
 }
 
-fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
+fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>) {
    // normal movement
    {
       let mut moved_pawns = cur_position.squares.pieces[BLACK][PAWN] >> 8;
@@ -1337,7 +1374,7 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 8) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
 
@@ -1346,22 +1383,22 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 8) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, BLACK, results);
       }
    }
@@ -1376,7 +1413,7 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 16) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
    }
@@ -1396,7 +1433,7 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
 
@@ -1405,22 +1442,22 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, BLACK, results);
       }
 
@@ -1429,7 +1466,7 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 9) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
    }
@@ -1449,7 +1486,7 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
 
@@ -1458,22 +1495,22 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Queen),
+            promotion: PromotionTarget::Queen,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Bishop),
+            promotion: PromotionTarget::Bishop,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Knight),
+            promotion: PromotionTarget::Knight,
          }, cur_position, BLACK, results);
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: Some(PromotionTarget::Rook),
+            promotion: PromotionTarget::Rook,
          }, cur_position, BLACK, results);
       }
 
@@ -1482,13 +1519,13 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: (to + 7) as u8,
             destination: to as u8,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
    }
 }
 
-fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
+fn white_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>) {
    king_movegen(cur_position, WHITE, results);
 
    if cur_position.white_kingside_castle {
@@ -1501,7 +1538,7 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: 4,
             destination: 6,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
    }
@@ -1516,13 +1553,13 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: 4,
             destination: 2,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, WHITE, results);
       }
    }
 }
 
-fn black_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
+fn black_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>) {
    king_movegen(cur_position, BLACK, results);
 
    if cur_position.black_kingside_castle {
@@ -1535,7 +1572,7 @@ fn black_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: 60,
             destination: 62,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
    }
@@ -1550,13 +1587,13 @@ fn black_king_movegen(cur_position: &Position, results: &mut Vec<Move>) {
          maybe_add_move(Move {
             origin: 60,
             destination: 58,
-            promotion: None,
+            promotion: PromotionTarget::None,
          }, cur_position, BLACK, results);
       }
    }
 }
 
-fn king_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn king_movegen(cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let king_position = cur_position.squares.pieces[color][KING];
    if king_position == 0 {
       return;
@@ -1569,7 +1606,7 @@ fn king_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) 
    add_moves(cur_position, color, king_index as u8, moves, results);
 }
 
-fn knight_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn knight_movegen(cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let mut knights = cur_position.squares.pieces[color][KNIGHT];
    while knights > 0 {
       let origin = pop_lsb(&mut knights);
@@ -1636,7 +1673,7 @@ fn rook_attacks(cur_position: &Position, square: usize) -> u64 {
       | negative_ray_attack(WEST, square, cur_position.squares.occupied)
 }
 
-fn bishop_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn bishop_movegen(cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let mut bishops = cur_position.squares.pieces[color][BISHOP];
    while bishops > 0 {
       let origin = pop_lsb(&mut bishops);
@@ -1646,7 +1683,7 @@ fn bishop_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>
    }
 }
 
-fn rook_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn rook_movegen(cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let mut rooks = cur_position.squares.pieces[color][ROOK];
    while rooks > 0 {
       let origin = pop_lsb(&mut rooks);
@@ -1656,7 +1693,7 @@ fn rook_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) 
    }
 }
 
-fn queen_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn queen_movegen(cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let mut queens = cur_position.squares.pieces[color][QUEEN];
    while queens > 0 {
       let origin = pop_lsb(&mut queens);
@@ -1666,7 +1703,7 @@ fn queen_movegen(cur_position: &Position, color: usize, results: &mut Vec<Move>)
    }
 }
 
-fn add_moves(cur_position: &Position, color: usize, origin: u8, mut moves: u64, results: &mut Vec<Move>) {
+fn add_moves(cur_position: &Position, color: usize, origin: u8, mut moves: u64, results: &mut Vec<CompressedMove>) {
    moves &= !(cur_position.squares.pieces[color ^ 1][KING]);
 
    while moves > 0 {
@@ -1675,17 +1712,17 @@ fn add_moves(cur_position: &Position, color: usize, origin: u8, mut moves: u64, 
       maybe_add_move(Move {
          origin,
          destination: to as u8,
-         promotion: None,
+         promotion: PromotionTarget::None,
       }, cur_position, color, results);
    }
 }
 
-fn maybe_add_move(a_move: Move, cur_position: &Position, color: usize, results: &mut Vec<Move>) {
+fn maybe_add_move(a_move: Move, cur_position: &Position, color: usize, results: &mut Vec<CompressedMove>) {
    let mut cloned_state = cur_position.clone();
    cloned_state.apply_move(a_move);
 
    if !cloned_state.in_check(Color::from_num(color)) {
-      results.push(a_move);
+      results.push(a_move.compress());
    }
 }
 
@@ -1708,7 +1745,7 @@ mod tests {
          Ok(Move {
             origin: 12,
             destination: 28,
-            promotion: None
+            promotion: PromotionTarget::None
          })
       );
       assert_eq!(
@@ -1716,7 +1753,7 @@ mod tests {
          Ok(Move {
             origin: 48,
             destination: 56,
-            promotion: Some(PromotionTarget::Queen)
+            promotion: PromotionTarget::Queen
          })
       );
       assert_eq!(
@@ -1724,7 +1761,7 @@ mod tests {
          Ok(Move {
             origin: 48,
             destination: 56,
-            promotion: Some(PromotionTarget::Knight)
+            promotion: PromotionTarget::Knight
          })
       );
       assert_eq!(
@@ -1732,7 +1769,7 @@ mod tests {
          Ok(Move {
             origin: 48,
             destination: 56,
-            promotion: Some(PromotionTarget::Bishop)
+            promotion: PromotionTarget::Bishop
          })
       );
       assert_eq!(
@@ -1740,7 +1777,7 @@ mod tests {
          Ok(Move {
             origin: 48,
             destination: 56,
-            promotion: Some(PromotionTarget::Rook)
+            promotion: PromotionTarget::Rook
          })
       );
    }
@@ -1776,7 +1813,7 @@ mod tests {
 
    #[test]
    fn movegen_test() {
-      let mut moves: Vec<Move> = Vec::new();
+      let mut moves: Vec<CompressedMove> = Vec::new();
       let mut a = State::from_start();
       a.gen_moves(&mut moves);
       assert_eq!(moves.len(), 20);
@@ -1790,7 +1827,7 @@ mod tests {
 
    #[test]
    fn king_movegen_test() {
-      let mut moves: Vec<Move> = Vec::new();
+      let mut moves: Vec<CompressedMove> = Vec::new();
       let mut a = State::from_fen("8/5k2/8/8/2K5/8/8/8 w - - 0 1").unwrap();
       a.gen_moves(&mut moves);
       assert_eq!(moves.len(), 8);
@@ -1855,9 +1892,9 @@ mod tests {
       let a_move = Move {
          origin: start_square,
          destination: end_square,
-         promotion: None,
+         promotion: PromotionTarget::None,
       };
 
-      assert!(moves.contains(&a_move));
+      assert!(moves.contains(&a_move.compress()));
    }
 }

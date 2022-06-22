@@ -1,4 +1,4 @@
-use crate::board::{Color, Move, Position, State};
+use crate::board::{Color, Move, Position, State, CompressedMove};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rayon::prelude::*;
@@ -60,7 +60,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
    //let moves = state.gen_moves();
-   let moves: Vec<Move> = todo!();
+   let moves: Vec<CompressedMove> = todo!();
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
    if moves.is_empty() && !state.position.in_check(state.position.side_to_move) {
@@ -73,7 +73,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
       .into_par_iter()
       .map(|a_move| {
          let mut new_state = state.clone();
-         new_state.apply_move(a_move);
+         new_state.apply_move(a_move.extract());
          let mut ne = 0;
          let mut ng = 0;
          let score = -nega_max(
@@ -106,7 +106,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
          "search @ depth {} took {}. best move: {}",
          depth,
          search_time_start.elapsed().as_secs_f64(),
-         b
+         b.extract()
       );
    } else {
       trace!(
@@ -115,7 +115,7 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
          search_time_start.elapsed().as_secs_f64(),
       );
    }
-   (max, best_move)
+   (max, best_move.map(|x| x.extract()))
 }
 
 fn nega_max(
@@ -134,7 +134,7 @@ fn nega_max(
       return evaluate(&state.position, state.position.side_to_move);
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
-   let moves: Vec<Move> = todo!();
+   let moves: Vec<CompressedMove> = todo!();
    //let moves = state.gen_moves();
    //moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
@@ -148,7 +148,7 @@ fn nega_max(
    }
    for a_move in moves {
       let mut state = state.clone();
-      state.apply_move(a_move);
+      state.apply_move(a_move.extract());
 
       let score = -nega_max(
          depth - 1,

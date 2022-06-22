@@ -1,4 +1,4 @@
-use crate::board::{Color, GameStatus, Move, State};
+use crate::board::{Color, GameStatus, Move, State, PromotionTarget, CompressedMove};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use noisy_float::prelude::*;
@@ -57,7 +57,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
 }
 
 struct Node {
-   last_move: Move,
+   last_move: CompressedMove,
    last_player: Color,
    parent: usize,
    children: Vec<usize>,
@@ -102,7 +102,7 @@ impl MctsState {
 
       let new_root = tree
          .get(self.root)
-         .and_then(|x| x.children.iter().find(|y| tree[**y].last_move == a_move));
+         .and_then(|x| x.children.iter().find(|y| tree[**y].last_move == a_move.compress()));
 
       if let Some(n) = new_root {
          self.root = *n;
@@ -144,8 +144,8 @@ fn mcts(
             last_move: Move {
                origin: 0,
                destination: 0,
-               promotion: None,
-            },
+               promotion: PromotionTarget::None,
+            }.compress(),
             last_player: !state.position.side_to_move,
             parent: 0,
             children: vec![],
@@ -173,7 +173,7 @@ fn mcts(
 
    best_child.map(|x| {
       (
-         tree[*x].last_move,
+         tree[*x].last_move.extract(),
          tree[*x].stats.score / tree[*x].stats.simulations as f64,
       )
    })
@@ -225,7 +225,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
 
                      // select the newly created node
                      cur_node = new_node_id;
-                     g.apply_move(*a_move);
+                     g.apply_move(a_move.extract());
                      g.gen_moves(&mut moves);
                      g_status = g.status(&moves);
                      break 'outer;
@@ -238,14 +238,14 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                   .iter()
                   .max_by_key(|x| r64(ucb1(exploration_val, &tree[**x].stats, &tree[cur_node].stats)))
                   .unwrap();
-               g.apply_move(tree[cur_node].last_move);
+               g.apply_move(tree[cur_node].last_move.extract());
             }
          }
 
          // simulate (random rollout)
          while g_status == GameStatus::Ongoing {
             let rand_move = *moves.choose(&mut rng).unwrap();
-            g.apply_move(rand_move);
+            g.apply_move(rand_move.extract());
             g.gen_moves(&mut moves);
             g_status = g.status(&moves);
          }
@@ -307,7 +307,7 @@ fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node], depth: us
    writeln!(
       out,
       "<li><span>{}</span><br><span>score «{}» simulations «{}»</span>",
-      node.last_move, node.stats.score, node.stats.simulations
+      node.last_move.extract(), node.stats.score, node.stats.simulations
    )
    .unwrap();
    writeln!(out, "<ul>").unwrap();
