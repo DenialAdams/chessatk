@@ -1788,7 +1788,7 @@ mod tests {
       a.apply_move("e2e4".parse().unwrap());
       a.gen_moves(&mut moves);
       assert_eq!(moves.len(), 20);
-      State::from_moves("g2g4 e7e5").unwrap();
+      a = State::from_moves("g2g4 e7e5").unwrap();
       a.gen_moves(&mut moves);
       assert_eq!(moves.len(), 21); // -1 because no 2 move pawn, +2 because bishop is free
    }
