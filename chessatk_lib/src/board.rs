@@ -1128,11 +1128,6 @@ impl State {
    }
 
    pub fn status(&self, moves: &[Move]) -> GameStatus {
-      // Threefold repetition
-      if self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
-         return GameStatus::Draw;
-      }
-
       if moves.is_empty() {
          if !self.position.in_check(self.position.side_to_move) {
             // I have no moves, and I'm not in check - stalemate
@@ -1141,7 +1136,7 @@ impl State {
             // I have no moves, and I'm in check - I lose
             GameStatus::Victory(!self.position.side_to_move)
          }
-      } else if self.halfmove_clock >= 100 {
+      } else if self.halfmove_clock >= 100 || self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
          GameStatus::Draw
       } else {
          GameStatus::Ongoing
