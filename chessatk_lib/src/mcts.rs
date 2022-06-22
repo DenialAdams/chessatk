@@ -198,7 +198,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
             let mut tree = mcts_state.tree.lock();
             'outer: loop {
                tree[cur_node].stats.unobserved_simulations += 1; // ("WATCH THE UNOBSERVED: A SIMPLE APPROACH TO PARALLELIZING MONTE CARLO TREE SEARCH")
-               moves = g.gen_moves(true);
+               moves = g.gen_moves();
                g_status = g.status(&moves);
 
                if g_status != GameStatus::Ongoing {
@@ -226,7 +226,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                      // select the newly created node
                      cur_node = new_node_id;
                      g.apply_move(*a_move);
-                     moves = g.gen_moves(true);
+                     moves = g.gen_moves();
                      g_status = g.status(&moves);
                      break 'outer;
                   }
@@ -246,7 +246,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
          while g_status == GameStatus::Ongoing {
             let rand_move = *moves.choose(&mut rng).unwrap();
             g.apply_move(rand_move);
-            moves = g.gen_moves(true);
+            moves = g.gen_moves();
             g_status = g.status(&moves);
          }
 
