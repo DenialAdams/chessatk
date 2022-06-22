@@ -1,7 +1,6 @@
 use smallvec::SmallVec;
 use std::fmt::{self, Write};
 use std::str::FromStr;
-use std::sync::atomic::AtomicU64;
 
 const WHITE: usize = 0;
 const BLACK: usize = 1;
