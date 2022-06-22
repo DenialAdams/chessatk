@@ -68,6 +68,7 @@ struct GameStart {
 #[allow(non_camel_case_types)]
 enum Event {
    challenge(ChallengeOuter),
+   challengeCanceled(ChallengeOuter),
    challengeDeclined(ChallengeOuter),
    gameStart(GameStart),
    gameFinish(GameStart),
@@ -322,6 +323,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
             }
             Event::gameFinish(_game_outer) => {}
             Event::challengeDeclined(_) => {}
+            Event::challengeCanceled(_) => {}
          }
       }
    }
