@@ -111,6 +111,8 @@ struct AiChallenge {
    level: u8, // 1..8
    clock: Clock,
    variant: String,
+   fen: String,
+   color: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -217,10 +219,13 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          .json(&AiChallenge {
             level,
             clock: Clock {
-               limit: 900,
+               //limit: 900,
+               limit: 300,
                increment: 0,
             },
+            color: "white".into(),
             variant: "standard".into(),
+            fen: "8/4k3/8/8/2K5/4BN2/8/8 w - - 0 1".into(), //fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
          })
          .send()
          .await

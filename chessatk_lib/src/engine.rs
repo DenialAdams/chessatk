@@ -1,4 +1,4 @@
-use crate::board::{Color, Move, Position, State, CompressedMove};
+use crate::board::{Color, CompressedMove, Move, Position, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use rayon::prelude::*;

@@ -43,7 +43,8 @@ async fn main() {
 
    if opt.profiling {
       let state =
-         chessatk_lib::board::State::from_fen("r1bq1rk1/ppp1p1bp/2np1np1/5p2/2PP4/2N2NP1/PP2PPBP/R1BQ1RK1 w - - 2 8").unwrap();
+         chessatk_lib::board::State::from_fen("r1bq1rk1/ppp1p1bp/2np1np1/5p2/2PP4/2N2NP1/PP2PPBP/R1BQ1RK1 w - - 2 8")
+            .unwrap();
       ite_tx
          .send(chessatk_lib::messages::InterfaceMessage::SetState(state))
          .unwrap();

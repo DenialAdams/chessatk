@@ -373,11 +373,11 @@ pub enum PromotionTarget {
 impl PromotionTarget {
    fn as_num(&self) -> u16 {
       match self {
-        PromotionTarget::None => 0,
-        PromotionTarget::Knight => 1,
-        PromotionTarget::Bishop => 2,
-        PromotionTarget::Rook => 3,
-        PromotionTarget::Queen => 4,
+         PromotionTarget::None => 0,
+         PromotionTarget::Knight => 1,
+         PromotionTarget::Bishop => 2,
+         PromotionTarget::Rook => 3,
+         PromotionTarget::Queen => 4,
       }
    }
 
@@ -721,7 +721,11 @@ impl CompressedMove {
       let promotion = PromotionTarget::from_num(self.0 & 0b111);
       let destination = ((self.0 >> 3) & 0b11_1111) as u8;
       let origin = ((self.0 >> 9) & 0b11_1111) as u8;
-      Move { origin, destination, promotion }
+      Move {
+         origin,
+         destination,
+         promotion,
+      }
    }
 }
 
@@ -729,7 +733,7 @@ impl CompressedMove {
 pub struct Move {
    pub origin: u8,
    pub destination: u8,
-   pub promotion: PromotionTarget
+   pub promotion: PromotionTarget,
 }
 
 impl Move {
@@ -764,7 +768,11 @@ impl FromStr for Move {
       }
       let origin_square = &s[..2];
       let dest_square = &s[2..4];
-      let promotion_target = s.get(4..5).map(str::parse::<PromotionTarget>).transpose()?.unwrap_or(PromotionTarget::None);
+      let promotion_target = s
+         .get(4..5)
+         .map(str::parse::<PromotionTarget>)
+         .transpose()?
+         .unwrap_or(PromotionTarget::None);
       Ok(Move {
          origin: algebraic_to_index(origin_square)?,
          destination: algebraic_to_index(dest_square)?,
@@ -871,7 +879,7 @@ impl State {
       let is_pawn_move = ((self.position.squares.pieces[WHITE][PAWN] | self.position.squares.pieces[BLACK][PAWN])
          & (1 << a_move.origin))
          != 0;
-      
+
       if is_capture | is_pawn_move {
          self.prior_positions.clear();
          self.halfmove_clock = 0;
@@ -885,9 +893,7 @@ impl State {
 
    pub fn gen_moves(&self, move_buf: &mut Vec<CompressedMove>) {
       move_buf.clear();
-      self
-         .position
-         .gen_moves_color(self.position.side_to_move, move_buf)
+      self.position.gen_moves_color(self.position.side_to_move, move_buf)
    }
 
    pub fn from_fen(fen: &str) -> Result<State, String> {
@@ -1165,6 +1171,20 @@ impl State {
    }
 
    pub fn status(&self, moves: &[CompressedMove]) -> GameStatus {
+      // KvK
+      if self.position.squares.occupied.count_ones() == 2 {
+         return GameStatus::Draw;
+      } else if self.position.squares.occupied.count_ones() == 3 {
+         // K+BvK
+         if (self.position.squares.pieces[WHITE][BISHOP] | self.position.squares.pieces[BLACK][BISHOP]).count_ones()
+            == 1
+            || (self.position.squares.pieces[WHITE][KNIGHT] | self.position.squares.pieces[BLACK][KNIGHT]).count_ones()
+               == 1
+         {
+            return GameStatus::Draw;
+         }
+      }
+
       if moves.is_empty() {
          if !self.position.in_check(self.position.side_to_move) {
             // I have no moves, and I'm not in check - stalemate
@@ -1173,7 +1193,8 @@ impl State {
             // I have no moves, and I'm in check - I lose
             GameStatus::Victory(!self.position.side_to_move)
          }
-      } else if self.halfmove_clock >= 100 || self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2 {
+      } else if self.halfmove_clock >= 100 || self.prior_positions.iter().filter(|x| **x == self.position).count() >= 2
+      {
          GameStatus::Draw
       } else {
          GameStatus::Ongoing
@@ -1206,35 +1227,60 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while moved_pawns > 0 {
          let to = pop_lsb(&mut moved_pawns);
-         maybe_add_move(Move {
-            origin: (to - 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
 
       while promotions > 0 {
          let to = pop_lsb(&mut promotions);
-         maybe_add_move(Move {
-            origin: (to - 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 
@@ -1245,11 +1291,16 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while double_pushes > 0 {
          let to = pop_lsb(&mut double_pushes);
-         maybe_add_move(Move {
-            origin: (to - 16) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 16) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 
@@ -1265,44 +1316,74 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while left_regular_attacks > 0 {
          let to = pop_lsb(&mut left_regular_attacks);
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
 
       while left_attack_promotions > 0 {
          let to = pop_lsb(&mut left_attack_promotions);
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
 
       if left_en_passant > 0 {
          let to = left_en_passant.trailing_zeros();
-         maybe_add_move(Move {
-            origin: (to - 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 
@@ -1318,44 +1399,74 @@ fn white_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while right_regular_attacks > 0 {
          let to = pop_lsb(&mut right_regular_attacks);
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
 
       while right_attack_promotions > 0 {
          let to = pop_lsb(&mut right_attack_promotions);
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, WHITE, results);
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
 
       if right_en_passant > 0 {
          let to = right_en_passant.trailing_zeros();
-         maybe_add_move(Move {
-            origin: (to - 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: (to - 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 }
@@ -1371,35 +1482,60 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while moved_pawns > 0 {
          let to = pop_lsb(&mut moved_pawns);
-         maybe_add_move(Move {
-            origin: (to + 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
 
       while promotions > 0 {
          let to = pop_lsb(&mut promotions);
-         maybe_add_move(Move {
-            origin: (to + 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 8) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 8) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 
@@ -1410,11 +1546,16 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while double_pushes > 0 {
          let to = pop_lsb(&mut double_pushes);
-         maybe_add_move(Move {
-            origin: (to + 16) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 16) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 
@@ -1430,44 +1571,74 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while left_regular_attacks > 0 {
          let to = pop_lsb(&mut left_regular_attacks);
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
 
       while left_attack_promotions > 0 {
          let to = pop_lsb(&mut left_attack_promotions);
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
 
       if left_en_passant > 0 {
          let to = left_en_passant.trailing_zeros();
-         maybe_add_move(Move {
-            origin: (to + 9) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 9) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 
@@ -1483,44 +1654,74 @@ fn black_pawn_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
 
       while right_regular_attacks > 0 {
          let to = pop_lsb(&mut right_regular_attacks);
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
 
       while right_attack_promotions > 0 {
          let to = pop_lsb(&mut right_attack_promotions);
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Queen,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Bishop,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Knight,
-         }, cur_position, BLACK, results);
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::Rook,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Queen,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Bishop,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Knight,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::Rook,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
 
       if right_en_passant > 0 {
          let to = right_en_passant.trailing_zeros();
-         maybe_add_move(Move {
-            origin: (to + 7) as u8,
-            destination: to as u8,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: (to + 7) as u8,
+               destination: to as u8,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 }
@@ -1535,11 +1736,16 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
          cur_position.square_is_attacked(Color::White, 5) | cur_position.square_is_attacked(Color::White, 6);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::White) {
-         maybe_add_move(Move {
-            origin: 4,
-            destination: 6,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: 4,
+               destination: 6,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 
@@ -1550,11 +1756,16 @@ fn white_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
          cur_position.square_is_attacked(Color::White, 3) | cur_position.square_is_attacked(Color::White, 2);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::White) {
-         maybe_add_move(Move {
-            origin: 4,
-            destination: 2,
-            promotion: PromotionTarget::None,
-         }, cur_position, WHITE, results);
+         maybe_add_move(
+            Move {
+               origin: 4,
+               destination: 2,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            WHITE,
+            results,
+         );
       }
    }
 }
@@ -1569,11 +1780,16 @@ fn black_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
          cur_position.square_is_attacked(Color::Black, 61) | cur_position.square_is_attacked(Color::Black, 62);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::Black) {
-         maybe_add_move(Move {
-            origin: 60,
-            destination: 62,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: 60,
+               destination: 62,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 
@@ -1584,11 +1800,16 @@ fn black_king_movegen(cur_position: &Position, results: &mut Vec<CompressedMove>
          cur_position.square_is_attacked(Color::Black, 58) | cur_position.square_is_attacked(Color::Black, 59);
 
       if !squares_occupied & !squares_attacked & !cur_position.in_check(Color::Black) {
-         maybe_add_move(Move {
-            origin: 60,
-            destination: 58,
-            promotion: PromotionTarget::None,
-         }, cur_position, BLACK, results);
+         maybe_add_move(
+            Move {
+               origin: 60,
+               destination: 58,
+               promotion: PromotionTarget::None,
+            },
+            cur_position,
+            BLACK,
+            results,
+         );
       }
    }
 }
@@ -1709,11 +1930,16 @@ fn add_moves(cur_position: &Position, color: usize, origin: u8, mut moves: u64, 
    while moves > 0 {
       let to = pop_lsb(&mut moves);
 
-      maybe_add_move(Move {
-         origin,
-         destination: to as u8,
-         promotion: PromotionTarget::None,
-      }, cur_position, color, results);
+      maybe_add_move(
+         Move {
+            origin,
+            destination: to as u8,
+            promotion: PromotionTarget::None,
+         },
+         cur_position,
+         color,
+         results,
+      );
    }
 }
 

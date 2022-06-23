@@ -1,4 +1,4 @@
-use crate::board::{Color, GameStatus, Move, State, PromotionTarget, CompressedMove};
+use crate::board::{Color, CompressedMove, GameStatus, Move, PromotionTarget, State};
 use crate::messages::{EngineMessage, InterfaceMessage};
 use log::trace;
 use noisy_float::prelude::*;
@@ -6,8 +6,13 @@ use rand::prelude::SliceRandom;
 use std::fs::File;
 use std::hint::unreachable_unchecked;
 use std::io::{BufWriter, Write};
+use std::sync::atomic::AtomicU64;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+
+static DRAWS: AtomicU64 = AtomicU64::new(0);
+static I_WIN: AtomicU64 = AtomicU64::new(0);
+static I_LOSE: AtomicU64 = AtomicU64::new(0);
 
 pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<EngineMessage>) {
    let mut state = State::from_start();
@@ -130,13 +135,16 @@ impl MctsState {
    }
 }
 
-/// panics if there are no legal moves in the given position
 fn mcts(
    mcts_state: &mut MctsState,
    time_budget: &Duration,
    state: &State,
    exploration_val: f64,
 ) -> Option<(Move, f64)> {
+   DRAWS.store(0, std::sync::atomic::Ordering::Relaxed);
+   I_LOSE.store(0, std::sync::atomic::Ordering::Relaxed);
+   I_WIN.store(0, std::sync::atomic::Ordering::Relaxed);
+
    {
       let mut tree = mcts_state.tree.lock();
       if tree.len() == 0 {
@@ -145,7 +153,8 @@ fn mcts(
                origin: 0,
                destination: 0,
                promotion: PromotionTarget::None,
-            }.compress(),
+            }
+            .compress(),
             last_player: !state.position.side_to_move,
             parent: 0,
             children: vec![],
@@ -164,6 +173,14 @@ fn mcts(
          });
       }
    });
+
+   trace!(
+      "DRAWS: {} I WIN: {} I LOSE: {}",
+      DRAWS.load(std::sync::atomic::Ordering::Relaxed),
+      I_WIN.load(std::sync::atomic::Ordering::Relaxed),
+      I_LOSE.load(std::sync::atomic::Ordering::Relaxed),
+   );
+
    let tree = mcts_state.tree.lock();
 
    let best_child = tree[mcts_state.root]
@@ -252,6 +269,20 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
 
          let mut tree = mcts_state.tree.lock();
 
+         match g_status {
+            GameStatus::Draw => {
+               DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            GameStatus::Victory(x) => {
+               if tree[mcts_state.root].last_player == x {
+                  I_LOSE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+               } else {
+                  I_WIN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+               }
+            }
+            _ => (),
+         }
+
          // backprop
          loop {
             match g_status {
@@ -307,7 +338,9 @@ fn emit_debug_node(out: &mut BufWriter<File>, i: usize, tree: &[Node], depth: us
    writeln!(
       out,
       "<li><span>{}</span><br><span>score «{}» simulations «{}»</span>",
-      node.last_move.extract(), node.stats.score, node.stats.simulations
+      node.last_move.extract(),
+      node.stats.score,
+      node.stats.simulations
    )
    .unwrap();
    writeln!(out, "<ul>").unwrap();
