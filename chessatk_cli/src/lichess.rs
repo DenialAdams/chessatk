@@ -276,9 +276,10 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          match event {
             Event::challenge(challenge_outer) => {
                let challenge_id = challenge_outer.challenge.id;
-               if (challenge_outer.challenge.rated && challenge_outer.challenge.variant.key != "standard")
-                  || (challenge_outer.challenge.variant.key != "standard"
-                     && challenge_outer.challenge.variant.key != "fromPosition")
+
+               let acceptable_rated_challenge = challenge_outer.challenge.variant.key == "standard";
+               let accetable_casual_challenge = challenge_outer.challenge.variant.key == "standard" || challenge_outer.challenge.variant.key == "fromPosition";
+               if acceptable_rated_challenge || (accetable_casual_challenge && !challenge_outer.challenge.rated)
                {
                   let challenge_reject_res = client
                      .post(&format!("https://lichess.org/api/challenge/{}/decline", challenge_id))

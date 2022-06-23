@@ -3,15 +3,15 @@ use std::fmt::{self, Write};
 use std::hint::unreachable_unchecked;
 use std::str::FromStr;
 
-const WHITE: usize = 0;
-const BLACK: usize = 1;
+pub const WHITE: usize = 0;
+pub const BLACK: usize = 1;
 
-const PAWN: usize = 0;
-const ROOK: usize = 1;
-const KNIGHT: usize = 2;
-const BISHOP: usize = 3;
-const QUEEN: usize = 4;
-const KING: usize = 5;
+pub const PAWN: usize = 0;
+pub const ROOK: usize = 1;
+pub const KNIGHT: usize = 2;
+pub const BISHOP: usize = 3;
+pub const QUEEN: usize = 4;
+pub const KING: usize = 5;
 
 const NORTH: usize = 0;
 const SOUTH: usize = 1;
@@ -22,14 +22,14 @@ const NORTH_WEST: usize = 5;
 const SOUTH_EAST: usize = 6;
 const SOUTH_WEST: usize = 7;
 
-const RANK_1: u64 = 0xff;
-//const RANK_2: u64 = 0xff00;
-//const RANK_3: u64 = 0xff0000;
-const RANK_4: u64 = 0xff000000;
-const RANK_5: u64 = 0xff00000000;
-//const RANK_6: u64 = 0xff0000000000;
-//const RANK_7: u64 = 0xff000000000000;
-const RANK_8: u64 = 0xff00000000000000;
+pub const RANK_1: u64 = 0xff;
+pub const RANK_2: u64 = 0xff00;
+pub const RANK_3: u64 = 0xff0000;
+pub const RANK_4: u64 = 0xff000000;
+pub const RANK_5: u64 = 0xff00000000;
+pub const RANK_6: u64 = 0xff0000000000;
+pub const RANK_7: u64 = 0xff000000000000;
+pub const RANK_8: u64 = 0xff00000000000000;
 
 const FILE_H: u64 = 0x8080808080808080;
 const FILE_G: u64 = 0x4040404040404040;
@@ -1175,7 +1175,7 @@ impl State {
       if self.position.squares.occupied.count_ones() == 2 {
          return GameStatus::Draw;
       } else if self.position.squares.occupied.count_ones() == 3 {
-         // K+BvK
+         // K+BvK || K+NvK
          if (self.position.squares.pieces[WHITE][BISHOP] | self.position.squares.pieces[BLACK][BISHOP]).count_ones()
             == 1
             || (self.position.squares.pieces[WHITE][KNIGHT] | self.position.squares.pieces[BLACK][KNIGHT]).count_ones()
