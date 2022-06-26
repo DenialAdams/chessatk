@@ -59,8 +59,8 @@ fn search(depth: u64, state: &State) -> (f64, Option<Move>) {
    let search_time_start = Instant::now();
    let mut max: f64 = std::f64::NEG_INFINITY;
    let mut best_move = None;
-   //let moves = state.gen_moves();
-   let moves: Vec<CompressedMove> = todo!();
+   let mut moves: Vec<CompressedMove> = Vec::new();
+   state.gen_moves(&mut moves);
    let mut nodes_expanded = 1;
    let mut nodes_generated = 1 + moves.len() as u64;
    if moves.is_empty() && !state.position.in_check(state.position.side_to_move) {
@@ -134,8 +134,8 @@ fn nega_max(
       return evaluate(&state.position, state.position.side_to_move);
    }
    let mut max: f64 = -10000.0 + dist_from_root as f64;
-   let moves: Vec<CompressedMove> = todo!();
-   //let moves = state.gen_moves();
+   let mut moves: Vec<CompressedMove> = Vec::new();
+   state.gen_moves(&mut moves);
    //moves.sort_unstable_by(|x, y| evaluate(&x.1).partial_cmp(&evaluate(&y.1)).unwrap());
    *nodes_expanded += 1;
    *nodes_generated += moves.len() as u64;
