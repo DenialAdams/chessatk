@@ -231,7 +231,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          .unwrap();
    }
 
-   let challenge_bot: Option<&'static str> = None;
+   let challenge_bot: Option<&'static str> = Some("sargon-1ply");
 
    if let Some(name) = challenge_bot {
       client
@@ -240,7 +240,7 @@ pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::R
          .json(&AcctChallenge {
             rated: false,
             clock: Clock {
-               limit: 600,
+               limit: 900,
                increment: 0,
             },
             variant: "standard".into(),
