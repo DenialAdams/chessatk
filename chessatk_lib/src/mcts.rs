@@ -190,7 +190,7 @@ fn mcts(
    let best_child = tree[mcts_state.root]
       .children
       .iter()
-      .max_by_key(|x| r64(tree[**x].stats.score + ((1.0/tree[**x].stats.simulations as f64).sqrt())));
+      .max_by_key(|x| r64(tree[**x].stats.score/tree[**x].stats.simulations as f64 + ((1.0/tree[**x].stats.simulations as f64).sqrt())));
 
    best_child.map(|x| {
       (
