@@ -150,8 +150,8 @@ fn read_api_token() -> Result<String, std::io::Error> {
    Ok(line_buf)
 }
 
-fn convert_err(_err: reqwest::Error) -> std::io::Error {
-   unimplemented!()
+fn convert_err(err: reqwest::Error) -> std::io::Error {
+   panic!("{}", err)
 }
 
 pub async fn main_loop(sender: mpsc::Sender<InterfaceMessage>, receiver: mpsc::Receiver<EngineMessage>) {

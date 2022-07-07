@@ -180,7 +180,7 @@ fn mat_val(piece: Piece) -> f64 {
       Piece::Knight => 3.0,
       Piece::Bishop => 3.0,
       Piece::Rook => 5.0,
-      Piece::Queen => 10.0,
+      Piece::Queen => 9.0,
       Piece::King => 0.0,
    }
 }
@@ -234,6 +234,7 @@ fn evaluate(position: &Position, side_to_move: Color) -> f64 {
    let mut move_buf = Vec::new();
    position.gen_moves_color(Color::White, &mut move_buf);
    let white_mobility_score = move_buf.len();
+   move_buf.clear();
    position.gen_moves_color(Color::Black, &mut move_buf);
    let black_mobility_score = move_buf.len();
    let mobility_score: f64 = white_mobility_score as f64 - black_mobility_score as f64;
