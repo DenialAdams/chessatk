@@ -42,7 +42,7 @@ pub fn start(receiver: mpsc::Receiver<InterfaceMessage>, sender: mpsc::Sender<En
                   (1.0 - (tree[mcts_state.root].stats.score / tree[mcts_state.root].stats.simulations as f64)) * 100.0,
                );
             }
-            //emit_debug_tree(&mcts_state);
+            emit_debug_tree(&mcts_state);
 
             sender.send(EngineMessage::BestMove(result.map(|x| x.0))).unwrap();
          }
@@ -77,6 +77,10 @@ struct NodeStats {
 }
 
 fn ucb1(exploration_val: f64, node_stats: &NodeStats, parent_stats: &NodeStats) -> f64 {
+   if node_stats.simulations + node_stats.unobserved_simulations < 50 {
+      return f64::INFINITY;
+   }
+
    let win_rate = if node_stats.simulations == 0 {
       0.5
    } else {
@@ -186,7 +190,7 @@ fn mcts(
    let best_child = tree[mcts_state.root]
       .children
       .iter()
-      .max_by_key(|x| tree[**x].stats.simulations);
+      .max_by_key(|x| r64(tree[**x].stats.score + ((1.0/tree[**x].stats.simulations as f64).sqrt())));
 
    best_child.map(|x| {
       (
@@ -210,6 +214,7 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
          // select / expand
          let mut cur_node = mcts_state.root;
          let mut g_status;
+         let mut did_simulate = true;
 
          {
             let mut tree = mcts_state.tree.lock();
@@ -218,8 +223,9 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
                g.gen_moves(&mut moves);
                g_status = g.status(&moves);
 
-               if g_status != GameStatus::Ongoing {
+               if g_status != GameStatus::Ongoing || tree[cur_node].stats.score.is_infinite() {
                   // terminal node
+                  did_simulate = false;
                   break;
                }
 
@@ -260,11 +266,13 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
          }
 
          // simulate (random rollout)
-         while g_status == GameStatus::Ongoing {
-            let rand_move = *moves.choose(&mut rng).unwrap();
-            g.apply_move(rand_move.extract());
-            g.gen_moves(&mut moves);
-            g_status = g.status(&moves);
+         if did_simulate {
+            while g_status == GameStatus::Ongoing {
+               let rand_move = *moves.choose(&mut rng).unwrap();
+               g.apply_move(rand_move.extract());
+               g.gen_moves(&mut moves);
+               g_status = g.status(&moves);
+            }
          }
 
          let mut tree = mcts_state.tree.lock();
@@ -283,19 +291,36 @@ fn mcts_inner(mcts_state: &MctsState, time_budget: &Duration, state: &State, exp
             _ => (),
          }
 
+         if !did_simulate {
+            if let GameStatus::Victory(ref p) = g_status {
+               tree[cur_node].stats.score = if tree[cur_node].last_player == *p {
+                  f64::INFINITY
+               } else {
+                  f64::NEG_INFINITY
+               };
+            }
+         }
+
          // backprop
          loop {
-            match g_status {
-               GameStatus::Draw => {
-                  tree[cur_node].stats.score += 0.5;
-               }
-               GameStatus::Victory(ref p) => {
-                  if tree[cur_node].last_player == *p {
-                     tree[cur_node].stats.score += 1.0;
+            if !did_simulate && tree[cur_node].children.iter().any(|x| tree[*x].stats.score == f64::INFINITY) {
+               tree[cur_node].stats.score = f64::NEG_INFINITY;
+            } else if !did_simulate && !tree[cur_node].children.is_empty() && tree[cur_node].children.iter().all(|x| tree[*x].stats.score == f64::NEG_INFINITY) {
+               tree[cur_node].stats.score = f64::INFINITY;
+            } else {
+               match g_status {
+                  GameStatus::Draw => {
+                     tree[cur_node].stats.score += 0.5;
                   }
+                  GameStatus::Victory(ref p) => {
+                     if tree[cur_node].last_player == *p {
+                        tree[cur_node].stats.score += 1.0;
+                     }
+                  }
+                  GameStatus::Ongoing => unsafe { unreachable_unchecked() },
                }
-               GameStatus::Ongoing => unsafe { unreachable_unchecked() },
             }
+
             tree[cur_node].stats.simulations += 1;
             tree[cur_node].stats.unobserved_simulations -= 1;
             if cur_node == mcts_state.root {
